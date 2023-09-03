@@ -1,0 +1,41 @@
+#!/usr/bin/env bash
+
+set -e
+
+function main() {
+    if [ -z $ARTENV_ROOT ]; then
+        echo "export ARTENV_ROOT=$HOME/.artenv"
+    fi
+    
+    if [ ! -d "${ARTENV_ROOT}" ] || [ ! -d "${ARTENV_ROOT}/versions" ] || [ ! -d "${ARTENV_ROOT}/envs" ]; then
+        init_dirs
+    fi
+    
+    if [ -d "${ARTENV_ROOT}/env" ]; then
+        env=$(readlink "${ARTENV_ROOT}/env")
+        env=$(basename $env)
+        source artenv-sh-shell $env
+    fi
+
+    cat << 'EOS'
+artenv() {
+    local commmand
+    command="${1:-}"
+    if [ "$#" -gt 0 ]
+    then
+        shift
+    fi
+    case "$command" in
+        (shell) eval "$(artenv "sh-$command" "$@")" ;;
+        (*) command artenv "$command" "$@" ;;
+    esac
+}
+EOS
+    exit 0
+}
+
+function init_dirs() {
+    mkdir -p "${ARTENV_ROOT}/"{versions,envs}
+}
+
+main

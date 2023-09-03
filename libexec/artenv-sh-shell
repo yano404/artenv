@@ -1,0 +1,75 @@
+#!/usr/bin/env bash
+
+set -e
+
+source util.sh
+
+if [ $# != 1 ]; then
+    echo "artenv shell <env-name>"
+    exit 1
+fi
+
+env=$1
+env_dir="${ARTENV_ROOT}/envs/${env}"
+ 
+if [ ! -d "$env_dir" ]; then
+    echo "${env} not found"
+    exit 1
+fi
+
+work_dir=$(realpath "${env_dir}/work")
+version_dir=$(readlink "${env_dir}/version")
+art_version=$(basename "$version_dir")
+artsys=$(realpath "${version_dir}/artsys")
+rootsys=$(realpath "${version_dir}/rootsys")
+root_version=$(basename "${rootsys}")
+
+path=$PATH
+libpath=$LIBPATH
+shlib=$SHLIB_PATH
+ldlib=$LD_LIBRARY_PATH
+dyldlib=$DYLD_LIBRARY_PATH
+cmake_prefix_path=$CMAKE_PREFIX_PATH
+
+if [ -n "$ROOTSYS" ]; then
+    path=$(remove_path $path "${ROOTSYS}/bin")
+    libpath=$(remove_path $libpath "${ROOTSYS}/lib")
+    shlib=$(remove_path $shlib "${ROOTSYS}/lib")
+    ldlib=$(remove_path $ldlib "${ROOTSYS}/lib")
+    dyldlib=$(remove_path $dyldlib "${ROOTSYS}/lib")
+    cmake_prefix_path=$(remove_path $cmake_prefix_path "${ROOTSYS}")
+fi
+
+if [ -n "$TARTSYS" ]; then
+    path=$(remove_path $path "${TARTSYS}/bin")
+    ldlib=$(remove_path $ldlib "${TARTSYS}/lib")
+fi
+
+path=$(prepend_path "$path" "${rootsys}/bin")
+path=$(prepend_path "$path" "${artsys}/bin")
+libpath=$(prepend_path "$libpath" "${rootsys}/lib")
+libpath=$(prepend_path "$libpath" "${artsys}/lib")
+shlib=$(prepend_path "$shlib" "${rootsys}/lib")
+shlib=$(prepend_path "$shlib" "${artsys}/lib")
+ldlib=$(prepend_path "$ldlib" "${rootsys}/lib")
+ldlib=$(prepend_path "$ldlib" "${artsys}/lib")
+dyldlib=$(prepend_path "$dyldlib" "${rootsys}/lib")
+dyldlib=$(prepend_path "$dyldlib" "${artsys}/lib")
+ldlib=$(prepend_path "$ldlib" "${rootsys}/lib")
+ldlib=$(prepend_path "$ldlib" "${artsys}/lib")
+cmake_prefix_path=$(prepend_path $cmake_prefix_path "${rootsys}")
+
+echo "export ART_PROJECT=${env}"
+echo "export ROOT_VERSION=${root_version}"
+echo "export ROOTSYS=${rootsys}"
+echo "export ART_VERSION=${art_version}"
+echo "export TARTSYS=${artsys}"
+echo "export PATH=${path}"
+echo "export LIBPATH=${libpath}"
+echo "export SHLIB_PATH=${shlib}"
+echo "export LD_LIBRARY_PATH=${ldlib}"
+echo "export DYLD_LIBRARY_PATH=${dyldlib}"
+echo "export CMAKE_PREFIX_PATH=${cmake_prefix_path}"
+echo "export ART_ANALYSIS_DIR=${work_dir}"
+echo "export ART_WORK_DIR=${work_dir}"
+echo "alias acd='cd ${work_dir}'"

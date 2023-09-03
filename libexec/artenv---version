@@ -1,0 +1,12 @@
+#!/usr/bin/env bash
+# Use git hash as version
+
+set -e
+
+if [ -n "$ARTENV_ROOT" ]; then
+    cd $ARTENV_ROOT
+    git_rev=$(git rev-parse HEAD)
+    echo "artenv: $git_rev"
+else
+    echo "ARTENV_ROOT is not set"
+fi

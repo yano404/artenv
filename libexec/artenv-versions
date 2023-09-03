@@ -1,0 +1,24 @@
+#!/usr/bin/env bash
+
+set -e
+
+versions_dir="${ARTENV_ROOT}/versions"
+
+if [ -d "$versions_dir" ]; then
+    versions_dir="$(realpath "$versions_dir")"
+fi
+
+current_version=$ART_VERSION
+hit_prefix="* "
+miss_prefix="  "
+
+versions_dir_entries=("$versions_dir"/*)
+
+for path in "${versions_dir_entries[@]}"; do
+    version=${path##*/}
+    if [ $version == $current_version ]; then
+        echo "${hit_prefix}${version}"
+    else
+        echo "${miss_prefix}${version}"
+    fi
+done

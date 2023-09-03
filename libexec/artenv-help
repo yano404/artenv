@@ -1,0 +1,14 @@
+#!/usr/bin/env bash
+
+set -e
+
+cat << EOS
+Usage: artenv <command> <arg>
+
+Commands:
+  ls           Print environment list
+  versions     Print installed artemis versions
+  shell <env>  Set environment variables in the current shell
+  default      Set default environment
+  --version    Show the version of artenv
+EOS
