@@ -25,7 +25,7 @@ exec $SHELL
 
 Register artemis:
 
-```
+```sh
 mkdir $ARTENV_ROOT/versions/<version-name>
 ln -s /path/to/artemis $ARTENV_ROOT/versions/<version-name>/artsys
 ln -s /path/to/root $ARTENV_ROOT/versions/<version-name>/rootsys
@@ -33,7 +33,7 @@ ln -s /path/to/root $ARTENV_ROOT/versions/<version-name>/rootsys
 
 Register analysis environment:
 
-```
+```sh
 mkdir $ARTENV_ROOT/envs/<env-name>
 ln -s $ARTENV_ROOT/versions/<version-you-use> $ARTENV_ROOT/envs/<env-name>/version
 ln -s /path/to/analysis_directory $ARTENV_ROOT/envs/<env-name>/work
