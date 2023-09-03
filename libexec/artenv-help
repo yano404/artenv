@@ -9,6 +9,6 @@ Commands:
   ls           Print environment list
   versions     Print installed artemis versions
   shell <env>  Set environment variables in the current shell
-  global       Set global environment
+  default      Set default environment
   --version    Show the version of artenv
 EOS

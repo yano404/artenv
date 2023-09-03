@@ -3,7 +3,7 @@
 set -e
 
 if [ $# != 1 ]; then
-    echo "artenv global <env-name>"
+    echo "artenv default <env-name>"
     exit 1
 fi
 
