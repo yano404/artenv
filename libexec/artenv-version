@@ -1,0 +1,10 @@
+#!/usr/bin/env bash
+
+set -e
+
+if [ -z $ART_VERSION ]; then
+    echo "ART_VERSION is not set"
+    exit 1
+fi
+
+echo "$ART_VERSION"
