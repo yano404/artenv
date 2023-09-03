@@ -5,7 +5,7 @@ set -e
 source util.sh
 
 if [ $# != 1 ]; then
-    echo "artenv shell <env-name>"
+    echo 'echo "artenv shell <env-name>"'
     exit 1
 fi
 
