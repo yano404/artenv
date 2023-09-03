@@ -53,9 +53,18 @@ if [ ! -d "${rootsys}/lib" ]; then
     exit 1
 fi
 
+read -e -p "Enter the path to yaml-cpp lib> " yamllib
+
+if [ -d "$yamllib" ]; then
+    yamllib=$(realpath $yamllib)
+else
+    echo "${yamllib} does not exist"
+    exit 1
+fi
 
 mkdir -p $version_dir
 ln -s $artsys ${version_dir}/artsys
 ln -s $rootsys ${version_dir}/rootsys
+ln -s $yamllib ${version_dir}/yamllib
 echo "${version} was registered"
 

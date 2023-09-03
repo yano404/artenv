@@ -33,6 +33,7 @@ art_version=$(basename "$version_dir")
 artsys=$(realpath "${version_dir}/artsys")
 rootsys=$(realpath "${version_dir}/rootsys")
 root_version=$(basename "${rootsys}")
+yamllib=$(realpath "${version_dir}/yamllib")
 
 path=$PATH
 libpath=$LIBPATH
@@ -55,18 +56,21 @@ if [ -n "$TARTSYS" ]; then
     ldlib=$(remove_path $ldlib "${TARTSYS}/lib")
 fi
 
+if [ -n "$YAML_CPP_LIB" ]; then
+    ldlib=$(remove_path $ldlib "$YAML_CPP_LIB")
+fi
+
 path=$(prepend_path "$path" "${rootsys}/bin")
 path=$(prepend_path "$path" "${artsys}/bin")
 libpath=$(prepend_path "$libpath" "${rootsys}/lib")
 libpath=$(prepend_path "$libpath" "${artsys}/lib")
 shlib=$(prepend_path "$shlib" "${rootsys}/lib")
 shlib=$(prepend_path "$shlib" "${artsys}/lib")
+ldlib=$(prepend_path "$ldlib" "$yamllib")
 ldlib=$(prepend_path "$ldlib" "${rootsys}/lib")
 ldlib=$(prepend_path "$ldlib" "${artsys}/lib")
 dyldlib=$(prepend_path "$dyldlib" "${rootsys}/lib")
 dyldlib=$(prepend_path "$dyldlib" "${artsys}/lib")
-ldlib=$(prepend_path "$ldlib" "${rootsys}/lib")
-ldlib=$(prepend_path "$ldlib" "${artsys}/lib")
 cmake_prefix_path=$(prepend_path $cmake_prefix_path "${rootsys}")
 
 echo "export ART_PROJECT=${env}"
@@ -74,6 +78,7 @@ echo "export ROOT_VERSION=${root_version}"
 echo "export ROOTSYS=${rootsys}"
 echo "export ART_VERSION=${art_version}"
 echo "export TARTSYS=${artsys}"
+echo "export YAML_CPP_LIB=${yamllib}"
 echo "export PATH=${path}"
 echo "export LIBPATH=${libpath}"
 echo "export SHLIB_PATH=${shlib}"
