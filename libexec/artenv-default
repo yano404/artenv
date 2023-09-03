@@ -2,9 +2,15 @@
 
 set -e
 
-if [ $# != 1 ]; then
+if [ $# -gt 1 ]; then
+    echo "artenv default"
     echo "artenv default <env-name>"
     exit 1
+fi
+
+if [ $# == 0 ]; then
+    env=$(readlink ${ARTENV_ROOT}/env)
+    echo ${env##*/}
 fi
 
 env=$1
