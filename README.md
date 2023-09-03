@@ -39,3 +39,7 @@ ln -s $ARTENV_ROOT/versions/<version-you-use> $ARTENV_ROOT/envs/<env-name>/versi
 ln -s /path/to/analysis_directory $ARTENV_ROOT/envs/<env-name>/work
 ```
 
+## License
+Copyright (c) 2023 Takayuki YANO
+
+The source code is licensed under the MIT License, see LICENSE.
