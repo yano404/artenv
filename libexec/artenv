@@ -1,0 +1,96 @@
+#!/usr/bin/env bash
+
+set -e
+
+if [ "$1" = "--debug" ]; then
+  export ARTENV_DEBUG=1
+  shift
+fi
+
+if [ -n "$ARTENV_DEBUG" ]; then
+  export PS4='+(${BASH_SOURCE}:${LINENO}): ${FUNCNAME[0]:+${FUNCNAME[0]}(): }'
+  set -x
+fi
+
+abort() {
+  { if [ "$#" -eq 0 ]; then cat -
+    else echo "artenv: $*"
+    fi
+  } >&2
+  exit 1
+}
+
+READLINK=$(type -P readlink)
+[ -n "$READLINK" ] || abort "cannot find readlink - are you missing GNU coreutils?"
+
+resolve_link() {
+  $READLINK "$1"
+}
+
+abs_dirname() {
+  local path="$1"
+
+  # Use a subshell to avoid changing the current path
+  (
+  while [ -n "$path" ]; do
+    cd_path="${path%/*}"
+    if [[ "$cd_path" != "$path" ]]; then
+      cd "$cd_path"
+    fi
+    name="${path##*/}"
+    path="$(resolve_link "$name" || true)"
+  done
+
+  echo "$PWD"
+  )
+}
+
+if [ -z "${ARTENV_ROOT}" ]; then
+  ARTENV_ROOT="${HOME}/.artenv"
+else
+  ARTENV_ROOT="${ARTENV_ROOT%/}"
+fi
+export ARTENV_ROOT
+
+shopt -s nullglob
+
+bin_path="$(abs_dirname "$0")"
+export PATH="${bin_path}:${PATH}"
+
+shopt -u nullglob
+
+command="$1"
+case "$command" in
+"" )
+  { artenv---version
+    artenv-help
+  } | abort
+  ;;
+-v | --version )
+  exec artenv---version
+  ;;
+-h | --help )
+  exec artenv-help
+  ;;
+* )
+  command_path="$(command -v "artenv-$command" || true)"
+  if [ -z "$command_path" ]; then
+    if [ "$command" == "shell" ]; then
+      abort "shell integration not enabled. Run \`artenv init' for instructions."
+    else
+      abort "no such command \`$command'"
+    fi
+  fi
+
+  shift 1
+  if [ "$1" = --help ]; then
+    if [[ "$command" == "sh-"* ]]; then
+      echo "artenv help \"$command\""
+    else
+      exec artenv-help "$command"
+    fi
+  else
+    exec "$command_path" "$@"
+  fi
+  ;;
+esac
