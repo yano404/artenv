@@ -29,6 +29,7 @@ Register artemis:
 artenv register-version <version-name>
 Enter the path to artemis> /path/to/artemis
 Enter the path to root> /path/to/root
+Enter the path to yaml-cpp lib> /path/to/yaml-cpp/lib
 <version-name> was registered
 ```
 
