@@ -10,5 +10,8 @@ Commands:
   versions     Print installed artemis versions
   shell <env>  Set environment variables in the current shell
   default      Set default environment
+  init         Configure the shell environment for artenv
   --version    Show the version of artenv
+  register-version  Register a artemis version
+  register-env Register analysis environment
 EOS
