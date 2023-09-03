@@ -4,16 +4,26 @@ set -e
 
 source util.sh
 
-if [ $# != 1 ]; then
+if [ $# -gt 1 ]; then
+    echo 'echo "artenv shell"'
     echo 'echo "artenv shell <env-name>"'
     exit 1
+fi
+
+if [ $# == 0 ]; then
+    if [ -z $ART_PROJECT ]; then
+        echo 'echo "ART_PROJECT is not set"'
+        exit 1
+    fi
+    echo 'echo "$ART_PROJECT"'
+    exit 0
 fi
 
 env=$1
 env_dir="${ARTENV_ROOT}/envs/${env}"
  
 if [ ! -d "$env_dir" ]; then
-    echo "${env} not found"
+    echo "echo ${env} not found"
     exit 1
 fi
 

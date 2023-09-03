@@ -1,0 +1,47 @@
+#!/usr/bin/env bash
+
+set -e
+
+if [ $# != 1 ]; then
+    echo "artenv register-env <env-name>"
+    exit 1
+fi
+
+env=$1
+env_dir="${ARTENV_ROOT}/envs/${env}"
+
+if [ -d "$env_dir" ]; then
+    echo "${env} already exists"
+    exit 1
+fi
+
+versions_dir="${ARTENV_ROOT}/versions"
+if [ -d "$versions_dir" ]; then
+    versions_dir="$(realpath $versions_dir)"
+fi
+versions_dir_entries=("$versions_dir"/*)
+echo "Select the artemis version"
+select version in "${versions_dir_entries[@]##*/}"; do
+    if [ ! -z $version ]; then
+        break ;
+    else
+        echo "Wrong selection"
+    fi
+done
+
+echo "${version} was selected"
+version="${versions_dir}/${version}"
+
+read -e -p "Enter the path to working directory> " work
+if [ -d "$work" ]; then
+    work="$(realpath $work)"
+else
+    echo "${work} dose not exist"
+    exit 1
+fi
+
+mkdir -p $env_dir
+ln -s $version ${env_dir}/version
+ln -s $work ${env_dir}/work
+echo "${env} was registered"
+

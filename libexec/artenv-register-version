@@ -1,0 +1,61 @@
+#!/usr/bin/env bash
+
+set -e
+
+if [ $# != 1 ]; then
+    echo "artenv register-version <version-name>"
+    exit 1
+fi
+
+version=$1
+version_dir="${ARTENV_ROOT}/versions/${version}"
+
+if [ -d "${version_dir}" ]; then
+    echo "${version} already exists"
+    exit 1
+fi
+
+read -e -p "Enter the path to artemis> " artsys
+
+if [ -d "$artsys" ]; then
+    artsys=$(realpath $artsys)
+else
+    echo "${artsys} does not exist"
+    exit 1
+fi
+
+if [ ! -d "${artsys}/bin" ]; then
+    echo "${artsys}/bin does not exit"
+    exit 1
+fi
+
+if [ ! -d "${artsys}/lib" ]; then
+    echo "${artsys}/lib does not exit"
+    exit 1
+fi
+
+read -e -p "Enter the path to root> " rootsys
+
+if [ -d "$rootsys" ]; then
+    rootsys=$(realpath $rootsys)
+else
+    echo "${rootsys} does not exist"
+    exit 1
+fi
+
+if [ ! -d "${rootsys}/bin" ]; then
+    echo "${rootsys}/bin does not exit"
+    exit 1
+fi
+
+if [ ! -d "${rootsys}/lib" ]; then
+    echo "${rootsys}/lib does not exit"
+    exit 1
+fi
+
+
+mkdir -p $version_dir
+ln -s $artsys ${version_dir}/artsys
+ln -s $rootsys ${version_dir}/rootsys
+echo "${version} was registered"
+
