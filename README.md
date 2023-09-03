@@ -26,17 +26,23 @@ exec $SHELL
 Register artemis:
 
 ```sh
-mkdir $ARTENV_ROOT/versions/<version-name>
-ln -s /path/to/artemis $ARTENV_ROOT/versions/<version-name>/artsys
-ln -s /path/to/root $ARTENV_ROOT/versions/<version-name>/rootsys
+artenv register-version <version-name>
+Enter the path to artemis> /path/to/artemis
+Enter the path to root> /path/to/root
+<version-name> was registered
 ```
 
 Register analysis environment:
 
 ```sh
-mkdir $ARTENV_ROOT/envs/<env-name>
-ln -s $ARTENV_ROOT/versions/<version-you-use> $ARTENV_ROOT/envs/<env-name>/version
-ln -s /path/to/analysis_directory $ARTENV_ROOT/envs/<env-name>/work
+artenv register-env <env-name>
+Select the artemis version
+1) artemis-vXXX
+2) artemis-vYYY
+#? 2
+artemis-vYYY was selected
+Enter the path to working directory> /path/to/analysis_directory
+<env-name> was registered
 ```
 
 ## License
