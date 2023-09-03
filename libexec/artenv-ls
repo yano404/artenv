@@ -1,0 +1,26 @@
+#!/usr/bin/env bash
+
+set -e
+
+envs_dir="${ARTENV_ROOT}/envs"
+
+if [ -d "$envs_dir" ]; then
+    envs_dir="$(realpath "$envs_dir")"
+else
+    echo "${ARTENV_ROOT}/envs not found"
+fi
+
+current_env=$ART_PROJECT
+hit_prefix="* "
+miss_prefix="  "
+
+envs_dir_entries=("$envs_dir"/*)
+
+for path in "${envs_dir_entries[@]}"; do
+    env=${path##*/}
+    if [ $env == $current_env ]; then
+        echo "${hit_prefix}${env}"
+    else
+        echo "${miss_prefix}${env}"
+    fi
+done
