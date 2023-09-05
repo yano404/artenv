@@ -54,6 +54,7 @@ fi
 if [ -n "$TARTSYS" ]; then
     path=$(remove_path $path "${TARTSYS}/bin")
     ldlib=$(remove_path $ldlib "${TARTSYS}/lib")
+    cmake_prefix_path=$(remove_path $cmake_prefix_path "${TARTSYS}")
 fi
 
 if [ -n "$YAML_CPP_LIB" ]; then
@@ -72,6 +73,7 @@ ldlib=$(prepend_path "$ldlib" "${artsys}/lib")
 dyldlib=$(prepend_path "$dyldlib" "${rootsys}/lib")
 dyldlib=$(prepend_path "$dyldlib" "${artsys}/lib")
 cmake_prefix_path=$(prepend_path $cmake_prefix_path "${rootsys}")
+cmake_prefix_path=$(prepend_path $cmake_prefix_path "${artsys}")
 
 echo "export ART_PROJECT=${env}"
 echo "export ROOT_VERSION=${root_version}"
