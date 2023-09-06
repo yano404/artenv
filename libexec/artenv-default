@@ -11,6 +11,7 @@ fi
 if [ $# == 0 ]; then
     env=$(readlink ${ARTENV_ROOT}/env)
     echo ${env##*/}
+    exit 0
 fi
 
 env=$1
@@ -28,3 +29,4 @@ if [ -L $target ]; then
 fi
 
 ln -s $env_dir $target
+exit 0
