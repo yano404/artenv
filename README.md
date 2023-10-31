@@ -46,6 +46,18 @@ Enter the path to working directory> /path/to/analysis_directory
 <env-name> was registered
 ```
 
+## Commands
+
+- `ls`               : Print the environment list
+- `versions`         : Print the artemis versions
+- `version`          : Print the current artemis version
+- `shell`            : Set or show the activated environment in the current shell
+- `default`          : Set or show the default environment
+- `init`             : Configure the shell environment for artenv
+- `--version`        : Show the version of artenv
+- `register-version` : Register a artemis version
+- `register-env`     : Register analysis environment
+
 ## License
 Copyright (c) 2023 Takayuki YANO
 
