@@ -59,6 +59,7 @@ fi
 
 if [ -n "$YAML_CPP_LIB" ]; then
     ldlib=$(remove_path $ldlib "$YAML_CPP_LIB")
+    cmake_prefix_path=$(remove_path $cmake_prefix_path "${YAML_CPP_LIB}")
 fi
 
 path=$(prepend_path "$path" "${rootsys}/bin")
@@ -74,6 +75,7 @@ dyldlib=$(prepend_path "$dyldlib" "${rootsys}/lib")
 dyldlib=$(prepend_path "$dyldlib" "${artsys}/lib")
 cmake_prefix_path=$(prepend_path $cmake_prefix_path "${rootsys}")
 cmake_prefix_path=$(prepend_path $cmake_prefix_path "${artsys}")
+cmake_prefix_path=$(prepend_path $cmake_prefix_path "${yamllib}")
 
 echo "export ART_PROJECT=${env}"
 echo "export ROOT_VERSION=${root_version}"
