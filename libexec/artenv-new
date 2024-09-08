@@ -9,7 +9,7 @@ fi
 
 dir=$(realpath $1)
 
-if [! -d $dir ]; then
+if [ ! -d $dir ]; then
     mkdir -p $dir
 fi
 
