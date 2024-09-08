@@ -9,10 +9,12 @@ Commands:
   ls           Print the environment list
   versions     Print the artemis versions
   version      Print the current artemis version
+  info         Print detail information of the environment
   shell        Set or show the activated environment in the current shell
   default      Set or show the default environment
   init         Configure the shell environment for artenv
   --version    Show the version of artenv
   register-version  Register a artemis version
   register-env Register analysis environment
+  new          Create the new working directory from templates
 EOS
