@@ -15,8 +15,6 @@ set(HEADERS
   TModuleDecoderRICHADCM.h
   TModuleDecoderMIRAFADC.h
   TModuleDecoderMIRAQDC.h
-  TStripSiliconPositionConditionProcessor.h
-  TScatteringAngleProcessor.h
   TModuleDecoderV1730ZLE.h
   TV1730ZLEDataObject.h
   TV1730ZLEWaveformData.h
