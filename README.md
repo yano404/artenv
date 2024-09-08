@@ -29,7 +29,7 @@ Register artemis:
 artenv register-version <version-name>
 Enter the path to artemis> /path/to/artemis
 Enter the path to root> /path/to/root
-Enter the path to yaml-cpp lib> /path/to/yaml-cpp/lib
+Enter the path to yaml-cpp> /path/to/yaml-cpp
 <version-name> was registered
 ```
 
@@ -51,14 +51,16 @@ Enter the path to working directory> /path/to/analysis_directory
 - `ls`               : Print the environment list
 - `versions`         : Print the artemis versions
 - `version`          : Print the current artemis version
+- `info`             : Print the detail information of environment
 - `shell`            : Set or show the activated environment in the current shell
 - `default`          : Set or show the default environment
 - `init`             : Configure the shell environment for artenv
 - `--version`        : Show the version of artenv
 - `register-version` : Register a artemis version
 - `register-env`     : Register analysis environment
+- `new`              : Create the working directory using the templates
 
 ## License
-Copyright (c) 2023 Takayuki YANO
+Copyright (c) 2024 Takayuki YANO
 
 The source code is licensed under the MIT License, see LICENSE.

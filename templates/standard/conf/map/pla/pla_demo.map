@@ -1,0 +1,3 @@
+# [cat] [id]  {dev, fp, det, geo, ch} {dev, fp, det, geo, ch} 
+2,  0,  11, 10,  2,  0,  0,  11, 10, 3,  0,  0  #  pla L timing & charge 
+2,  1,  11, 10,  2,  0,  1,  11, 10, 3,  0,  1  #  pla R timing & charge 

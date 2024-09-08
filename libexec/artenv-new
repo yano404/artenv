@@ -1,0 +1,34 @@
+#!/usr/bin/env bash
+
+set -e
+
+if [ $# != 1 ]; then
+    echo "artenv new <dir>"
+    exit 1
+fi
+
+dir=$(realpath $1)
+
+if [! -d $dir ]; then
+    mkdir -p $dir
+fi
+
+if [ ! -z "$( ls -A $dir )" ]; then
+   echo "${dir} is not empty!"
+   exit 1
+fi
+
+templates_dir="${ARTENV_ROOT}/templates"
+templates_dir_entries=("$templates_dir"/*)
+echo "Select the templates"
+select template in "${templates_dir_entries[@]##*/}"; do
+    if [ ! -z $template ]; then
+        break;
+    else
+        echo "Wrong selection"
+    fi
+done
+
+template="${templates_dir}/${template}"
+cp -rT $template $dir
+

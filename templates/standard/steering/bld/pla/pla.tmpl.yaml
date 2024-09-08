@@ -1,0 +1,48 @@
+Processor:
+  - name: proc_@NAME@_ch2ns
+    type: art::TParameterArrayLoader
+    parameter:
+      Name:     prm_@NAME@_ch2ns
+      Type:     art::TAffineConverter
+      FileName: prm/pla/@NAME@_ch2ns.dat
+
+  - name: proc_@NAME@_prm_ch2MeV
+    type: art::TParameterArrayLoader
+    parameter:
+      Name:     prm_@NAME@_ch2MeV
+      Type:     art::TAffineConverter
+      FileName: prm/pla/@NAME@_ch2MeV.dat
+
+  - name: proc_@NAME@_raw
+    type: art::TTimingChargeMappingProcessor
+    parameter:
+      CatID:              @CID@
+      ChargeType:         1
+      TimingTypeID:       0
+      ChargeTypeID:       1
+      TrailingComesFirst: 0
+      OutputCollection:   @NAME@_raw
+      OutputTransparency: 0
+
+  - name: proc_@NAME@_calib
+    type: art::TTimingChargeCalibrationProcessor
+    parameter:
+      InputCollection:      @NAME@_raw
+      OutputCollection:     @NAME@_cal
+      TimingConverterArray: prm_@NAME@_ch2ns
+      ChargeConverterArray: prm_@NAME@_ch2MeV
+
+  - name: proc_@NAME@_separater
+    type: art::TSeparateOutputProcessor
+    parameter:
+      InputCollection: @NAME@_cal
+      OutputCollections:
+        - @NAME@_l
+        - @NAME@_r
+
+  - name: proc_@NAME@
+    type: art::TTwoSidedPlasticCalibrationProcessor
+    parameter:
+      InputCollection1: @NAME@_l
+      InputCollection2: @NAME@_r
+      OutputCollection: @NAME@

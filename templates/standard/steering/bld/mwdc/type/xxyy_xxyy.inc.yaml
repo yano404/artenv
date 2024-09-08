@@ -1,0 +1,15 @@
+Processor:
+  - name: proc_@NAME@_tracking
+    type: art::TMWDCTrackingProcessor
+    parameter:
+      InputCollection:
+        - @DC1@_x1
+        - @DC1@_x2
+        - @DC1@_y1
+        - @DC1@_y2
+        - @DC2@_x1
+        - @DC2@_x2
+        - @DC2@_y1
+        - @DC2@_y2
+      OutputCollection:   @NAME@
+      OutputTransparency: 0

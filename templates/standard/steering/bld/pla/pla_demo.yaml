@@ -1,0 +1,6 @@
+Processor:
+  - include:
+      name: pla.tmpl.yaml
+      replace:
+        CID: 2
+        NAME: pla_demo

@@ -1,0 +1,14 @@
+Processor:
+  - name: proc_tref_v1290_1
+    type: art::TTimeReferenceProcessor
+    parameter:
+      # [[device] [focus] [detector] [geo] [ch]]
+      RefConfig: [11, 10,  2, 0, 15]
+      SegConfig: [11, 10,  2, 0]
+
+  - name: proc_tref_v1190_1
+    type: art::TTimeReferenceProcessor
+    parameter:
+      # [[device] [focus] [detector] [geo] [ch]]
+      RefConfig: [11,  3, 31, 0, 127]
+      SegConfig: [11,  3, 31, 0]

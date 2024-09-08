@@ -1,0 +1,48 @@
+Processor:
+
+  - include:
+      name: time2dt.inc.yaml
+      replace:
+        CATID: 20
+        NAME: dc1_demo
+        TREDET: pla_demo
+        TREFID: 0
+
+  - include:
+      name:  type/xxyy.inc.yaml
+      replace:
+        NAME: dc1_demo
+
+  - include:
+      name: time2dt.inc.yaml
+      replace:
+        CATID: 21
+        NAME: dc2_demo
+        TREDET: pla_demo
+        TREFID: 0
+
+  - include:
+      name:  type/xxyy.inc.yaml
+      replace:
+        NAME: dc2_demo
+
+  - include:
+      name:  type/xxyy_xxyy.inc.yaml
+      replace:
+        DC1:  dc1_demo
+        DC2:  dc2_demo
+        NAME: dc_demo
+
+  - include:
+      name: type/xxyy_calib.inc.yaml
+      replace:
+        NAME: dc1_demo
+        TGATE: [-50.,50.]
+        QGATE: [0,10000]
+
+  - include:
+      name: type/xxyy_calib.inc.yaml
+      replace:
+        NAME: dc2_demo
+        TGATE: [-50.,50.]
+        QGATE: [0,10000]
