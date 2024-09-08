@@ -1,0 +1,39 @@
+#!/usr/bin/env bash
+
+set -e
+
+if [ $# == 0 ]; then
+    env=$ART_PROJECT
+    art_version=$ART_VERSION
+    artsys=$TARTSYS
+    rootsys=$ROOTSYS
+    yamllib=$YAML_CPP_LIB
+    work_dir=$ART_WORK_DIR
+elif [ $# == 1 ]; then
+    env=$1
+    env_dir="${ARTENV_ROOT}/envs/${env}"
+
+    if [ ! -d "$env_dir" ]; then
+        echo "${env} not found"
+        exit 1
+    fi
+    ver_dir=$(readlink "${env_dir}/version")
+    art_version=$(basename "$ver_dir")
+    artsys=$(realpath "${ver_dir}/artsys")
+    rootsys=$(realpath "${ver_dir}/rootsys")
+    yamllib=$(realpath "${ver_dir}/yamllib")
+    work_dir=$(realpath "${env_dir}/work")
+else
+    echo "artenv info"
+    echo "artenv info <env-name>"
+    exit 1
+fi
+
+echo "- env: ${env##*/}"
+echo "- artemis version: ${art_version}"
+echo "  - artemis: ${artsys}"
+echo "  - root: ${rootsys}"
+echo "  - yaml-cpp: ${yamllib}"
+echo "- working directory: ${work_dir}"
+exit 0
+
