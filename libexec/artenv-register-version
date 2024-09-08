@@ -53,12 +53,26 @@ if [ ! -d "${rootsys}/lib" ]; then
     exit 1
 fi
 
-read -e -p "Enter the path to yaml-cpp lib> " yamllib
+read -e -p "Enter the path to yaml-cpp> " yamlcpp
 
-if [ -d "$yamllib" ]; then
-    yamllib=$(realpath $yamllib)
+if [ -d "$yamlcpp" ]; then
+    # find lib
+    if [ -d "${yamlcpp}/lib" ]; then
+        yamllib=$(realpath "${yamlcpp}/lib");
+    elif [ -d "${yamlcpp}/lib64" ]; then
+        yamllib=$(realpath "${yamlcpp}/lib64");
+    else
+        echo "Could not find yaml-cpp library in ${yamlcpp}"
+        exit 1
+    fi
+    # find cmake config
+    if [ -d "${yamllib}/cmake/yaml-cpp" ]; then
+        yamlcmake=$(realpath "${yamllib}/cmake");
+    elif [ -d "${yamlcpp}/share/cmake/yaml-cpp" ]; then
+        yamlcmake=$(realpath "${yamlcpp}/share/cmake");
+    fi
 else
-    echo "${yamllib} does not exist"
+    echo "${yamlcpp} does not exist"
     exit 1
 fi
 
@@ -66,5 +80,6 @@ mkdir -p $version_dir
 ln -s $artsys ${version_dir}/artsys
 ln -s $rootsys ${version_dir}/rootsys
 ln -s $yamllib ${version_dir}/yamllib
+ln -s $yamlcmake ${version_dir}/yamlcmake
 echo "${version} was registered"
 
