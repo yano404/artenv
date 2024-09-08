@@ -1,0 +1,4 @@
+position: [0,0.,250.0]
+angle: 0.
+turned: 0
+plane_config: prm/mwdc/dc2_demo/config.yaml

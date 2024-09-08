@@ -1,0 +1,51 @@
+anchor:
+  - &tbin  200
+ - &tmin  @TMIN@
+ - &tmax  @TMAX@
+ - &tdiffmin  @TDIFFMIN@
+ - &tdiffmax  @TDIFFMAX@
+ - &qbin  200
+ - &qmin  @QMIN@
+ - &qmax  @QMAX@
+ - &qdiffmin @QDIFFMIN@
+ - &qdiffmax @QDIFFMAX@
+
+alias:
+
+  group:
+    - name: plastic_@NAME@
+  title: Platic @NAME@
+  contents:
+    - name: t_@NAME@l
+      title: Plastic @NAME@ Left Timing
+      x: ["@NAME@_l.fTiming", *tbin, *tmin, *tmax]
+    - name: t_@NAME@_r
+      title: Plastic @NAME@ Right Timing
+      x: ["@NAME@_r.fTiming", *tbin, *tmin, *tmax]
+    - name: t_@NAME@_ave
+      title: Plastic @NAME@ Average Timing
+      x: ["@NAME@.GetTAve()", *tbin, *tmin, *tmax]
+    - name: t_@NAME@_diff
+      title: Plastic @NAME@ Timing Differnce
+      x: ["@NAME@.GetTDiff()", *tbin, *tdiffmin, *tdiffmax]
+    - name: t_@NAME@lr
+      title: Plastic @NAME@ LR Timing
+      x: ["@NAME@_l.fTiming", *tbin, *tmin, *tmax]
+      y: ["@NAME@_r.fTiming", *tbin, *tmin, *tmax]
+
+    - name: q_@NAME@_l
+      title: Plastic @NAME@ Left Charge
+      x: ["@NAME@_l.fCharge", *qbin, *qmin, *qmax]
+    - name: q_@NAME@_r
+      title: Plastic @NAME@ Right Charge
+      x: ["@NAME@_r.fCharge", *qbin, *qmin, *qmax]
+    - name: q_@NAME@_ave
+      title: Plastic @NAME@ Average Charge
+      x: ["@NAME@.GetQAve()", *qbin, *qmin, *qmax]
+    - name: q_@NAME@_diff
+      title: Plastic @NAME@ Charge Difference
+      x: ["@NAME@.GetQDiff()", *qbin, *qdiffmin, *qdiffmax]
+    - name: q_@NAME@_lr
+      title: Plastic @NAME@ LR Charge
+      x: ["@NAME@_l.fCharge", *qbin, *qmin, *qmax]
+      y: ["@NAME@_r.fCharge", *qbin, *qmin, *qmax]

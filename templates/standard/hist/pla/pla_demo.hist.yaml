@@ -1,0 +1,12 @@
+include:
+  - name: hist/pla/pla.tmpl.hist.yaml
+    replace:
+      NAME: pla_demo
+      TMIN: -1000
+      TMAX: 4000
+      QMIN: 0
+      QMAX: 4000
+      TDIFFMIN: -1000
+      TDIFFMAX: 1000
+      QDIFFMIN: -1000
+      QDIFFMAX: 1000

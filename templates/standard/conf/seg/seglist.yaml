@@ -1,0 +1,29 @@
+###################################
+#<Example>
+#
+#BLD_VXX:
+# segid: [[dev], [fp], [det]]
+# type: V7XX
+# modules:
+#   - id: [geo1]
+#   - id: [geo2]
+###################################
+
+BLD_V1190:
+  segid: [11, 3, 31]
+  type: V1190
+  modules:
+    - id: 0
+
+BLD_V1290:
+  segid: [11, 10, 2]
+  type: V1290
+  modules:
+    - id: 0
+
+BLD_V792:
+  segid: [11, 10, 3]
+  type: V7XX
+  modules:
+    - id: 0
+

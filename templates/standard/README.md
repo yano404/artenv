@@ -1,0 +1,6 @@
+
+# Artemis Working Directory Template
+
+
+
+
