@@ -11,8 +11,6 @@
 #pragma link C++ class art::TModuleDecoderRICHADCM+;
 #pragma link C++ class art::TModuleDecoderMIRAFADC+;
 #pragma link C++ class art::TModuleDecoderMIRAQDC+;
-#pragma link C++ class art::TStripSiliconPositionConditionProcessor+;
-#pragma link C++ class art::TScatteringAngleProcessor+;
 #pragma link C++ class art::TModuleDecoderV1730ZLE+;
 #pragma link C++ class art::TV1730ZLEDataObject+;
 #pragma link C++ class art::TV1730ZLEWaveformData+;
