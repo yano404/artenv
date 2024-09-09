@@ -5,6 +5,7 @@ set(SOURCES
   TModuleDecoderRICHADCM.cc
   TModuleDecoderMIRAFADC.cc
   TModuleDecoderMIRAQDC.cc
+  TModuleDecoderFIT.cc
   TModuleDecoderV1730ZLE.cc
   TV1730ZLEDataObject.cc
   TV1730ZLEWaveformData.cc
@@ -15,6 +16,7 @@ set(HEADERS
   TModuleDecoderRICHADCM.h
   TModuleDecoderMIRAFADC.h
   TModuleDecoderMIRAQDC.h
+  TModuleDecoderFIT.h
   TModuleDecoderV1730ZLE.h
   TV1730ZLEDataObject.h
   TV1730ZLEWaveformData.h
