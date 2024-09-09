@@ -1,7 +1,7 @@
 /*
  * @file TModuleDecoderMIRAFADC.cc
  * @date  Created : 2024.03.06 KWS
- *  Last Modified : 2024.03.06 KWS
+ *  Last Modified : 2024.09.09 T.Yano
  *--------------------------------------------------------
  *    Comment : MIRA FADC decoder for ridf format 
  *              original : TArtDecoderMIRAFADC.cc by H. Baba
@@ -49,7 +49,7 @@ Int_t TModuleDecoderMIRAFADC::Decode(char* buf, const int &size, TObjArray *seg)
     Bool_t   ut = (evtdata[i]   & 0x00004000) >> 14; // under threshold
     Bool_t   ht = (evtdata[i]   & 0x00008000) >> 15; // hit
     UShort_t tt = (evtdata[i]   & 0xffff0000) >> 16; // time
-    UShort_t tn = (evtdata[i+1] & 0x0003ffff);       // time numerator
+    UInt_t   tn = (evtdata[i+1] & 0x0003ffff);       // time numerator
     UShort_t td = (evtdata[i+1] & 0xfffc0000) >> 18; // time denominator
     Short_t  bs = (evtdata[i+2] & 0xffff0000) >> 16; // baseline
     Short_t  tp = (evtdata[i+2] & 0x0000ffff);       // trapezoid peak
