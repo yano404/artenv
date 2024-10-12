@@ -43,6 +43,8 @@ Select the artemis version
 #? 2
 artemis-vYYY was selected
 Enter the path to working directory> /path/to/analysis_directory
+Use artlogin? (y/n)> y
+Enter the path to git repos (required)> /path/to/git_repos or URL of git repos
 <env-name> was registered
 ```
 
