@@ -8,7 +8,10 @@ if [ $# == 0 ]; then
     artsys=$TARTSYS
     rootsys=$ROOTSYS
     yamllib=$YAML_CPP_LIB
+    analysis_dir=$ART_ANALYSIS_DIR
     work_dir=$ART_WORK_DIR
+    git_repos=$ART_REPOS
+    use_artlogin=$USE_ARTLOGIN
 elif [ $# == 1 ]; then
     env=$1
     env_dir="${ARTENV_ROOT}/envs/${env}"
@@ -22,7 +25,18 @@ elif [ $# == 1 ]; then
     artsys=$(realpath "${ver_dir}/artsys")
     rootsys=$(realpath "${ver_dir}/rootsys")
     yamllib=$(realpath "${ver_dir}/yamllib")
+    analysis_dir=$(realpath "${env_dir}/work")
     work_dir=$(realpath "${env_dir}/work")
+    git_repos=""
+    if [ -e "${env_dir}/git_repos" ]; then
+        git_repos=$(realpath "${env_dir}/git_repos")
+    elif [ -L "${env_dir}/git_repos" ]; then
+        git_repos=$(readlink "${env_dir}/git_repos")
+    fi
+    use_artlogin=NO
+    if [ -e "${env_dir}/art_login.sh" ]; then
+        use_artlogin=YES
+    fi
 else
     echo "artenv info"
     echo "artenv info <env-name>"
@@ -34,6 +48,9 @@ echo "- artemis version: ${art_version}"
 echo "  - artemis: ${artsys}"
 echo "  - root: ${rootsys}"
 echo "  - yaml-cpp: ${yamllib}"
+echo "- analysis directory: ${analysis_dir}"
 echo "- working directory: ${work_dir}"
+echo "- git repository: ${git_repos}"
+echo "- use artlogin: ${use_artlogin}"
 exit 0
 
