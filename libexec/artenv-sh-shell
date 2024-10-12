@@ -36,6 +36,14 @@ root_version=$(basename "${rootsys}")
 yamllib=$(realpath "${version_dir}/yamllib")
 yamlcmake=$(realpath "${version_dir}/yamlcmake")
 
+# Check if git repo exists
+git_repos=""
+if [ -e "${env_dir}/git_repos" ]; then
+    git_repos=$(realpath "${env_dir}/git_repos")
+elif [ -L "${env_dir}/git_repos" ]; then
+    git_repos=$(readlink "${env_dir}/git_repos")
+fi
+
 path=$PATH
 libpath=$LIBPATH
 shlib=$SHLIB_PATH
@@ -96,4 +104,12 @@ echo "export DYLD_LIBRARY_PATH=${dyldlib}"
 echo "export CMAKE_PREFIX_PATH=${cmake_prefix_path}"
 echo "export ART_ANALYSIS_DIR=${work_dir}"
 echo "export ART_WORK_DIR=${work_dir}"
+echo "export ART_REPOS=${git_repos}"
 echo "alias acd='cd ${work_dir}'"
+echo "type artlogin &>/dev/null && unset -f artlogin"
+if [ -e "${env_dir}/artlogin.sh" ]; then
+    echo "export USE_ARTLOGIN=YES"
+    echo "function artlogin() { . $env_dir/artlogin.sh \$1; alias acd='cd \$ART_WORK_DIR'; }"
+else
+    echo "export USE_ARTLOGIN=NO"
+fi
