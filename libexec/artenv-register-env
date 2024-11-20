@@ -57,7 +57,9 @@ while true; do
             read -e -p "Enter the path to git repos (optional)> " git_repos
             ln -s $version ${env_dir}/version
             ln -s $work ${env_dir}/work
-            ln -s $git_repos ${env_dir}/git_repos
+            if [  $git_repos ]; then
+                ln -s $git_repos ${env_dir}/git_repos
+            fi
             break
             ;;
     esac
