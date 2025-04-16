@@ -64,6 +64,7 @@ Enter the path to git repos (required)> /path/to/git_repos or URL of git repos
 - `register-version` : Register a artemis version
 - `register-env`     : Register analysis environment
 - `new`              : Create the working directory using the templates
+- `make`             : Install artemis to your environment
 
 ### Examples
 
@@ -116,6 +117,25 @@ $ echo $PATH
 $ artenv shell artdev
 $ echo $PATH
 /home/yano/local/artemis/develop/bin:/home/yano/local/root/v6.32.04/bin:/home/yano/local/artenv/libexec
+```
+
+- `artenv make`
+
+```
+$ artenv make
+Enter the path to root> /home/yano/local/root/v6.32.04
+Enter the path to yaml-cpp> /home/yano/local/yaml-cpp/v0.8.0
+Enter the path to the source of artemis> /home/yano/src/artemis/develop
+Enter the path to build directory> /home/yano/build/artemis/artdev
+Enter the install prefix> /home/yano/local/artemis/artdev
+Artemis will be built and installed to your environment with the following settings.
+- root: /home/yano/local/root/v6.32.04
+- yaml-cpp: /home/yano/local/yaml-cpp/v0.8.0
+- artemis:
+  - source directory: /home/yano/src/artemis/develop
+  - build directory: /home/yano/build/artemis/artdev
+  - install prefix: /home/yano/local/artemis/artdev
+OK? (y/N)>y
 ```
 
 ## License

@@ -17,4 +17,5 @@ Commands:
   register-version  Register a artemis version
   register-env Register analysis environment
   new          Create the new working directory from templates
+  make         Install artemis to your environment
 EOS

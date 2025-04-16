@@ -1,0 +1,161 @@
+#!/usr/bin/env bash
+
+set -e
+
+source util.sh
+
+currentdir=`pwd`
+
+read -e -p "Enter the path to root> " rootsys
+
+if [ -d "$rootsys" ]; then
+    rootsys=$(realpath $rootsys)
+else
+    echo "${rootsys} does not exist"
+    exit 1
+fi
+
+if [ ! -d "${rootsys}/bin" ]; then
+    echo "${rootsys}/bin does not exit"
+    exit 1
+fi
+
+if [ ! -d "${rootsys}/lib" ]; then
+    echo "${rootsys}/lib does not exit"
+    exit 1
+fi
+
+read -e -p "Enter the path to yaml-cpp> " yamlcpp
+
+if [ -d "$yamlcpp" ]; then
+    # find lib
+    if [ -d "${yamlcpp}/lib" ]; then
+        yamllib=$(realpath "${yamlcpp}/lib");
+    elif [ -d "${yamlcpp}/lib64" ]; then
+        yamllib=$(realpath "${yamlcpp}/lib64");
+    else
+        echo "Could not find yaml-cpp library in ${yamlcpp}"
+        exit 1
+    fi
+    # find cmake config
+    if [ -d "${yamllib}/cmake/yaml-cpp" ]; then
+        yamlcmake=$(realpath "${yamllib}/cmake");
+    elif [ -d "${yamlcpp}/share/cmake/yaml-cpp" ]; then
+        yamlcmake=$(realpath "${yamlcpp}/share/cmake");
+    fi
+else
+    echo "${yamlcpp} does not exist"
+    exit 1
+fi
+
+read -e -p "Enter the path to the source of artemis> " artsrc
+
+if [ ! -d "$artsrc" ]; then
+    echo "${artsrc} does not exist"
+    exit 1
+fi
+
+read -e -p "Enter the path to build directory> " artbld
+read -e -p "Enter the install prefix> " artsys
+
+echo "Artemis will be built and installed to your environment with the following settings."
+echo "- root: ${rootsys}"
+echo "- yaml-cpp: ${yamlcpp}"
+echo "- artemis:"
+echo "  - source directory: ${artsrc}"
+echo "  - build directory: ${artbld}"
+echo "  - install prefix: ${artsys}"
+read -p "OK? (y/N)>" ans
+
+case $ans in
+    [yY]*) ;;
+    *) exit 0;;
+esac
+
+if [ -d "$artbld" ]; then
+    if [ -n "$(ls $artbld)" ]; then
+        echo "${artbld} is not empty."
+        read -p "Is it OK to erase the directory? (y/N)" ans
+        case $ans in
+            [yY]*) rm -rf $artbld/*;;
+            *) exit 0;;
+        esac
+    fi
+else
+    mkdir -p $artbld
+fi
+
+path=$PATH
+libpath=$LIBPATH
+shlib=$SHLIB_PATH
+ldlib=$LD_LIBRARY_PATH
+dyldlib=$DYLD_LIBRARY_PATH
+cmake_prefix_path=$CMAKE_PREFIX_PATH
+
+if [ -n "$ROOTSYS" ]; then
+    path=$(remove_path $path "${ROOTSYS}/bin")
+    libpath=$(remove_path $libpath "${ROOTSYS}/lib")
+    shlib=$(remove_path $shlib "${ROOTSYS}/lib")
+    ldlib=$(remove_path $ldlib "${ROOTSYS}/lib")
+    dyldlib=$(remove_path $dyldlib "${ROOTSYS}/lib")
+    cmake_prefix_path=$(remove_path $cmake_prefix_path "${ROOTSYS}")
+fi
+
+if [ -n "$TARTSYS" ]; then
+    path=$(remove_path $path "${TARTSYS}/bin")
+    ldlib=$(remove_path $ldlib "${TARTSYS}/lib")
+    cmake_prefix_path=$(remove_path $cmake_prefix_path "${TARTSYS}")
+fi
+
+if [ -n "$YAML_CPP_LIB" ]; then
+    ldlib=$(remove_path $ldlib "$YAML_CPP_LIB")
+fi
+
+if [ -n "$YAML_CPP_CMAKE" ]; then
+    cmake_prefix_path=$(remove_path $cmake_prefix_path "${YAML_CPP_CMAKE}")
+fi
+
+path=$(prepend_path "$path" "${rootsys}/bin")
+libpath=$(prepend_path "$libpath" "${rootsys}/lib")
+shlib=$(prepend_path "$shlib" "${rootsys}/lib")
+ldlib=$(prepend_path "$ldlib" "$yamllib")
+ldlib=$(prepend_path "$ldlib" "${rootsys}/lib")
+dyldlib=$(prepend_path "$dyldlib" "${rootsys}/lib")
+cmake_prefix_path=$(prepend_path $cmake_prefix_path "${rootsys}")
+cmake_prefix_path=$(prepend_path $cmake_prefix_path "${yamlcmake}")
+
+cd $artbld
+cmake $artsrc -DCMAKE_INSTALL_PREFIX="${artsys}"
+make -j4
+make install
+
+cd $currentdir
+echo "artemis is built and installed to ${artsys}"
+
+while true; do
+    read -p "Will you register this version to artenv? (y/N)> " ans
+    case $ans in
+        [yY]*)
+            read -p "Enter the version name>" version
+            version_dir="${ARTENV_ROOT}/versions/${version}"
+
+            if [ -d "${version_dir}" ]; then
+                echo "${version} already exists"
+                continue
+            fi
+
+            mkdir -p $version_dir
+            ln -s $artsys ${version_dir}/artsys
+            ln -s $rootsys ${version_dir}/rootsys
+            ln -s $yamllib ${version_dir}/yamllib
+            ln -s $yamlcmake ${version_dir}/yamlcmake
+            echo "${version} was registered"
+            break
+            ;;
+
+        *)
+            break
+            ;;
+    esac
+done
+
