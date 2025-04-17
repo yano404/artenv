@@ -58,14 +58,14 @@ fi
 read -e -p "Enter the path to build directory> " artbld
 read -e -p "Enter the install prefix> " artsys
 
-echo "Artemis will be built and installed to your environment with the following settings."
+echo "Artemis will be built and installed to your environment with the following configulations."
 echo "- root: ${rootsys}"
 echo "- yaml-cpp: ${yamlcpp}"
 echo "- artemis:"
 echo "  - source directory: ${artsrc}"
 echo "  - build directory: ${artbld}"
 echo "  - install prefix: ${artsys}"
-read -p "OK? (y/N)>" ans
+read -p "OK? (y/N)> " ans
 
 case $ans in
     [yY]*) ;;
@@ -75,7 +75,7 @@ esac
 if [ -d "$artbld" ]; then
     if [ -n "$(ls $artbld)" ]; then
         echo "${artbld} is not empty."
-        read -p "Is it OK to erase the directory? (y/N)" ans
+        read -p "Is it OK to erase the directory? (y/N)> " ans
         case $ans in
             [yY]*) rm -rf $artbld/*;;
             *) exit 0;;
