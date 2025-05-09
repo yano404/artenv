@@ -34,11 +34,22 @@ Int_t TModuleDecoderFIT::Decode(char* buf, const int &size, TObjArray *seg)
 {
   UInt_t *evtdata = (UInt_t*) buf;
   UInt_t evtsize = size/sizeof(UInt_t);
-  constexpr Int_t igeo = 0;
+  Int_t igeo;
   Int_t err, trg, edge, ch, measure;
   
   fHitData->Clear();
 
+  // Structure of 1st word
+  // bits
+  //  0-11 : geometry
+  // 12-27 : trigger number
+  // 28-31 : 0b0110
+
+  // Read geometry
+  igeo = evtdata[0] & 0x0fff;
+
+  // 2nd word ~ : Hits
+  // Structure of hits
   // bits 
   //  0-19 : data.
   // 20-27 : channel.
@@ -50,7 +61,7 @@ Int_t TModuleDecoderFIT::Decode(char* buf, const int &size, TObjArray *seg)
   // 29-30 : fixed to 0.
   //    31 : error.
  
-  for(size_t i{0}; i != evtsize; i ++) {
+  for(size_t i{1}; i != evtsize; i ++) {
     err     = (evtdata[i] & 0x80000000) >> 31; // err bit
     if (err) continue;
     trg     = (evtdata[i] & 0x10000000) >> 28; // trigger
