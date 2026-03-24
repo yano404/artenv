@@ -12,28 +12,12 @@ git clone https://github.com/yano404/artenv.git ~/.artenv
 
 ## Setup
 
-### Bash
-
-Add to `.bashrc` :
+Add to your `.bashrc` or `.zshrc` :
 
 ```
 export ARTENV_ROOT="$HOME/.artenv"
 export PATH="$ARTENV_ROOT/bin:$PATH"
-eval "$(artenv init)"
-source "${ARTENV_ROOT}/completions/artenv.bash"
-```
-
-### Zsh
-
-Add to `.zshrc` :
-
-```zsh
-export ARTENV_ROOT="$HOME/.artenv"
-export PATH="$ARTENV_ROOT/bin:$PATH"
-eval "$(artenv init)"
-fpath=("${ARTENV_ROOT}/completions" $fpath)
-autoload -Uz compinit
-compinit
+eval "$(artenv init -)"
 ```
 
 Restart your shell.
@@ -65,6 +49,28 @@ Enter the path to working directory> /path/to/analysis_directory
 Use artlogin? (y/n)> y
 Enter the path to git repos (required)> /path/to/git_repos or URL of git repos
 <env-name> was registered
+```
+
+## Shell Completions
+
+`artenv` provides shell completion for both bash and zsh.
+
+### Bash
+
+Source the completion script from your `.bashrc` :
+
+```
+source "${ARTENV_ROOT}/completions/artenv.bash"
+```
+
+### Zsh
+
+Add the completions directory to fpath and initialize completion in your `.zshrc` :
+
+```zsh
+fpath=("${ARTENV_ROOT}/completions" $fpath)
+autoload -Uz compinit
+compinit
 ```
 
 ## Commands
