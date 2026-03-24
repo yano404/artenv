@@ -124,6 +124,13 @@ dyldlib=$(prepend_path "$dyldlib" "${rootsys}/lib")
 cmake_prefix_path=$(prepend_path $cmake_prefix_path "${rootsys}")
 cmake_prefix_path=$(prepend_path $cmake_prefix_path "${yamlcmake}")
 
+PATH=$path
+LIBPATH=$libpath
+SHLIB_PATH=$shlib
+LD_LIBRARY_PATH=$ldlib
+DYLD_LIBRARY_PATH=$dyldlib
+CMAKE_PREFIX_PATH=$cmake_prefix_path
+
 cd $artbld
 cmake $artsrc -DCMAKE_INSTALL_PREFIX="${artsys}"
 make -j4
