@@ -53,18 +53,19 @@ Enter the path to git repos (required)> /path/to/git_repos or URL of git repos
 
 ## Commands
 
-- `ls`               : Print the environment lis
-- `versions`         : Print the artemis versions
-- `version`          : Print the current artemis version
-- `info`             : Print the detail information of environment
-- `shell`            : Set or show the activated environment in the current shell
-- `default`          : Set or show the default environment
-- `init`             : Configure the shell environment for artenv
-- `--version`        : Show the version of artenv
-- `register-version` : Register a artemis version
-- `register-env`     : Register analysis environment
-- `new`              : Create the working directory using the templates
-- `make`             : Install artemis to your environment
+- `ls`                         : Print the environment list
+- `versions`                   : Print the artemis versions
+- `version`                    : Print the current artemis version
+- `info [env]`                 : Print the detail information of environment
+- `shell [env]`                : Set or show the activated environment in the current shell
+- `default [env]`              : Set or show the default environment
+- `init`                       : Configure the shell environment for artenv
+- `--version`                  : Show the version of artenv
+- `register-version <version>` : Register a artemis version
+- `register-env <env>`         : Register analysis environment
+- `new <dir>`                  : Create the working directory using the templates
+- `make`                       : Build and install artemis to your environment
+- `doctor [env|--all]`         : Diagnose a registered environment
 
 ### Examples
 
@@ -138,7 +139,15 @@ Artemis will be built and installed to your environment with the following setti
 OK? (y/N)>y
 ```
 
+- `artenv doctor`
+
+```
+artenv doctor (checks the current environment)
+artenv doctor <env> (checks the specified environment)
+artenv doctor --all (checks all registered environments)
+```
+
 ## License
-Copyright (c) 2024 Takayuki YANO
+Copyright (c) 2026 Takayuki YANO
 
 The source code is licensed under the MIT License, see LICENSE.

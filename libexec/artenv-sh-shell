@@ -1,115 +1,126 @@
 #!/usr/bin/env bash
+set -euo pipefail
 
-set -e
+script_dir="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
+# shellcheck source=/dev/null
+source "${script_dir}/util.sh"
 
-source util.sh
+print_export() {
+  local name="$1"
+  local value="$2"
+  printf 'export %s=%q\n' "${name}" "${value}"
+}
 
-if [ $# -gt 1 ]; then
-    echo 'echo "artenv shell"'
-    echo 'echo "artenv shell <env-name>"'
-    exit 1
-fi
+main() {
+  [[ -n "${ARTENV_ROOT:-}" ]] || die "ARTENV_ROOT is not set"
+  [[ $# -le 1 ]] || die 'usage: artenv shell [env]'
 
-if [ $# == 0 ]; then
-    if [ -z $ART_PROJECT ]; then
-        echo 'echo "ART_PROJECT is not set"'
-        exit 1
-    fi
-    echo 'echo "$ART_PROJECT"'
+  if [[ $# -eq 0 ]]; then
+    [[ -n "${ART_PROJECT:-}" ]] || die "ART_PROJECT is not set"
+    printf 'echo "%s"\n' "${ART_PROJECT}"
     exit 0
-fi
+  fi
 
-env=$1
-env_dir="${ARTENV_ROOT}/envs/${env}"
- 
-if [ ! -d "$env_dir" ]; then
-    echo "echo ${env} not found"
-    exit 1
-fi
+  local env="$1"
+  local env_dir="${ARTENV_ROOT}/envs/${env}"
 
-work_dir=$(realpath "${env_dir}/work")
-version_dir=$(readlink "${env_dir}/version")
-art_version=$(basename "$version_dir")
-artsys=$(realpath "${version_dir}/artsys")
-rootsys=$(realpath "${version_dir}/rootsys")
-root_version=$(basename "${rootsys}")
-yamllib=$(realpath "${version_dir}/yamllib")
-yamlcmake=$(realpath "${version_dir}/yamlcmake")
+  load_env_metadata "${env_dir}"
 
-# Check if git repo exists
-git_repos=""
-if [ -e "${env_dir}/git_repos" ]; then
-    git_repos=$(realpath "${env_dir}/git_repos")
-elif [ -L "${env_dir}/git_repos" ]; then
-    git_repos=$(readlink "${env_dir}/git_repos")
-fi
+  local work_dir="${ENV_WORK_DIR}"
+  local art_version="${ENV_VERSION_NAME}"
+  local artsys="${ENV_ARTSYS}"
+  local rootsys="${ENV_ROOTSYS}"
+  local root_version
+  root_version="$(basename "${rootsys}")"
+  local yamllib="${ENV_YAMLLIB}"
+  local yamlcmake="${ENV_YAMLCMAKE}"
+  local git_repos="${ENV_GIT_REPOS}"
+  local use_artlogin="${ENV_USE_ARTLOGIN}"
 
-path=$PATH
-libpath=$LIBPATH
-shlib=$SHLIB_PATH
-ldlib=$LD_LIBRARY_PATH
-dyldlib=$DYLD_LIBRARY_PATH
-cmake_prefix_path=$CMAKE_PREFIX_PATH
+  local path="${PATH:-}"
+  local libpath="${LIBPATH:-}"
+  local shlib="${SHLIB_PATH:-}"
+  local ldlib="${LD_LIBRARY_PATH:-}"
+  local dyldlib="${DYLD_LIBRARY_PATH:-}"
+  local cmake_prefix_path="${CMAKE_PREFIX_PATH:-}"
 
-if [ -n "$ROOTSYS" ]; then
-    path=$(remove_path $path "${ROOTSYS}/bin")
-    libpath=$(remove_path $libpath "${ROOTSYS}/lib")
-    shlib=$(remove_path $shlib "${ROOTSYS}/lib")
-    ldlib=$(remove_path $ldlib "${ROOTSYS}/lib")
-    dyldlib=$(remove_path $dyldlib "${ROOTSYS}/lib")
-    cmake_prefix_path=$(remove_path $cmake_prefix_path "${ROOTSYS}")
-fi
+  if [[ -n "${ROOTSYS:-}" ]]; then
+    path="$(remove_path "${path}" "${ROOTSYS}/bin")"
+    libpath="$(remove_path "${libpath}" "${ROOTSYS}/lib")"
+    shlib="$(remove_path "${shlib}" "${ROOTSYS}/lib")"
+    ldlib="$(remove_path "${ldlib}" "${ROOTSYS}/lib")"
+    dyldlib="$(remove_path "${dyldlib}" "${ROOTSYS}/lib")"
+    cmake_prefix_path="$(remove_path "${cmake_prefix_path}" "${ROOTSYS}")"
+  fi
 
-if [ -n "$TARTSYS" ]; then
-    path=$(remove_path $path "${TARTSYS}/bin")
-    ldlib=$(remove_path $ldlib "${TARTSYS}/lib")
-    cmake_prefix_path=$(remove_path $cmake_prefix_path "${TARTSYS}")
-fi
+  if [[ -n "${TARTSYS:-}" ]]; then
+    path="$(remove_path "${path}" "${TARTSYS}/bin")"
+    libpath="$(remove_path "${libpath}" "${TARTSYS}/lib")"
+    shlib="$(remove_path "${shlib}" "${TARTSYS}/lib")"
+    ldlib="$(remove_path "${ldlib}" "${TARTSYS}/lib")"
+    dyldlib="$(remove_path "${dyldlib}" "${TARTSYS}/lib")"
+    cmake_prefix_path="$(remove_path "${cmake_prefix_path}" "${TARTSYS}")"
+  fi
 
-if [ -n "$YAML_CPP_LIB" ]; then
-    ldlib=$(remove_path $ldlib "$YAML_CPP_LIB")
-fi
+  if [[ -n "${YAML_CPP_LIB:-}" ]]; then
+    ldlib="$(remove_path "${ldlib}" "${YAML_CPP_LIB}")"
+  fi
 
-if [ -n "$YAML_CPP_CMAKE" ]; then
-    cmake_prefix_path=$(remove_path $cmake_prefix_path "${YAML_CPP_CMAKE}")
-fi
+  if [[ -n "${YAML_CPP_CMAKE:-}" ]]; then
+    cmake_prefix_path="$(remove_path "${cmake_prefix_path}" "${YAML_CPP_CMAKE}")"
+  fi
 
-path=$(prepend_path "$path" "${rootsys}/bin")
-path=$(prepend_path "$path" "${artsys}/bin")
-libpath=$(prepend_path "$libpath" "${rootsys}/lib")
-libpath=$(prepend_path "$libpath" "${artsys}/lib")
-shlib=$(prepend_path "$shlib" "${rootsys}/lib")
-shlib=$(prepend_path "$shlib" "${artsys}/lib")
-ldlib=$(prepend_path "$ldlib" "$yamllib")
-ldlib=$(prepend_path "$ldlib" "${rootsys}/lib")
-ldlib=$(prepend_path "$ldlib" "${artsys}/lib")
-dyldlib=$(prepend_path "$dyldlib" "${rootsys}/lib")
-dyldlib=$(prepend_path "$dyldlib" "${artsys}/lib")
-cmake_prefix_path=$(prepend_path $cmake_prefix_path "${rootsys}")
-cmake_prefix_path=$(prepend_path $cmake_prefix_path "${artsys}")
-cmake_prefix_path=$(prepend_path $cmake_prefix_path "${yamlcmake}")
+  path="$(prepend_path "${path}" "${rootsys}/bin")"
+  path="$(prepend_path "${path}" "${artsys}/bin")"
 
-echo "export ART_PROJECT=${env}"
-echo "export ROOT_VERSION=${root_version}"
-echo "export ROOTSYS=${rootsys}"
-echo "export ART_VERSION=${art_version}"
-echo "export TARTSYS=${artsys}"
-echo "export YAML_CPP_LIB=${yamllib}"
-echo "export YAML_CPP_CMAKE=${yamlcmake}"
-echo "export PATH=${path}"
-echo "export LIBPATH=${libpath}"
-echo "export SHLIB_PATH=${shlib}"
-echo "export LD_LIBRARY_PATH=${ldlib}"
-echo "export DYLD_LIBRARY_PATH=${dyldlib}"
-echo "export CMAKE_PREFIX_PATH=${cmake_prefix_path}"
-echo "export ART_ANALYSIS_DIR=${work_dir}"
-echo "export ART_WORK_DIR=${work_dir}"
-echo "export ART_REPOS=${git_repos}"
-echo "alias acd='cd ${work_dir}'"
-echo "type artlogin &>/dev/null && unset -f artlogin"
-if [ -e "${env_dir}/artlogin.sh" ]; then
-    echo "export USE_ARTLOGIN=YES"
-    echo "function artlogin() { . $env_dir/artlogin.sh \$1; alias acd='cd \$ART_WORK_DIR'; }"
-else
-    echo "export USE_ARTLOGIN=NO"
-fi
+  libpath="$(prepend_path "${libpath}" "${rootsys}/lib")"
+  libpath="$(prepend_path "${libpath}" "${artsys}/lib")"
+
+  shlib="$(prepend_path "${shlib}" "${rootsys}/lib")"
+  shlib="$(prepend_path "${shlib}" "${artsys}/lib")"
+
+  ldlib="$(prepend_path "${ldlib}" "${yamllib}")"
+  ldlib="$(prepend_path "${ldlib}" "${rootsys}/lib")"
+  ldlib="$(prepend_path "${ldlib}" "${artsys}/lib")"
+
+  dyldlib="$(prepend_path "${dyldlib}" "${rootsys}/lib")"
+  dyldlib="$(prepend_path "${dyldlib}" "${artsys}/lib")"
+
+  cmake_prefix_path="$(prepend_path "${cmake_prefix_path}" "${rootsys}")"
+  cmake_prefix_path="$(prepend_path "${cmake_prefix_path}" "${artsys}")"
+  cmake_prefix_path="$(prepend_path "${cmake_prefix_path}" "${yamlcmake}")"
+
+  print_export "ART_PROJECT" "${env}"
+  print_export "ROOT_VERSION" "${root_version}"
+  print_export "ROOTSYS" "${rootsys}"
+  print_export "ART_VERSION" "${art_version}"
+  print_export "TARTSYS" "${artsys}"
+  print_export "YAML_CPP_LIB" "${yamllib}"
+  print_export "YAML_CPP_CMAKE" "${yamlcmake}"
+  print_export "PATH" "${path}"
+  print_export "LIBPATH" "${libpath}"
+  print_export "SHLIB_PATH" "${shlib}"
+  print_export "LD_LIBRARY_PATH" "${ldlib}"
+  print_export "DYLD_LIBRARY_PATH" "${dyldlib}"
+  print_export "CMAKE_PREFIX_PATH" "${cmake_prefix_path}"
+  print_export "ART_ANALYSIS_DIR" "${work_dir}"
+  print_export "ART_WORK_DIR" "${work_dir}"
+  print_export "ART_REPOS" "${git_repos}"
+
+  printf 'alias acd=%q\n' "cd ${work_dir}"
+  printf 'type artlogin &>/dev/null && unset -f artlogin\n'
+
+  if [[ "${use_artlogin}" == "YES" ]]; then
+    print_export "USE_ARTLOGIN" "YES"
+    printf 'artlogin() {\n'
+    # shellcheck disable=SC2016
+    printf '  . %q "$1"\n' "${env_dir}/artlogin.sh"
+    # shellcheck disable=SC2016
+    printf '  alias acd=%q\n' 'cd $ART_WORK_DIR'
+    printf '}\n'
+  else
+    print_export "USE_ARTLOGIN" "NO"
+  fi
+}
+
+main "$@"

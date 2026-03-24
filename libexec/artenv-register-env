@@ -1,69 +1,107 @@
 #!/usr/bin/env bash
 
-set -e
+set -euo pipefail
 
-if [ $# != 1 ]; then
-    echo "artenv register-env <env-name>"
-    exit 1
-fi
+script_dir="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
+# shellcheck source=/dev/null
+source "${script_dir}/util.sh"
 
-env=$1
-env_dir="${ARTENV_ROOT}/envs/${env}"
+main() {
+  [[ -n "${ARTENV_ROOT:-}" ]] || die "ARTENV_ROOT is not set"
+  [[ $# -eq 1 ]] || die "usage: artenv register-env <env>"
 
-if [ -d "$env_dir" ]; then
-    echo "${env} already exists"
-    exit 1
-fi
+  local env_name="$1"
+  local env_dir="${ARTENV_ROOT}/envs/${env_name}"
+  local versions_dir="${ARTENV_ROOT}/versions"
+  local tmp_dir
 
-versions_dir="${ARTENV_ROOT}/versions"
-if [ -d "$versions_dir" ]; then
-    versions_dir="$(realpath $versions_dir)"
-fi
-versions_dir_entries=("$versions_dir"/*)
-echo "Select the artemis version"
-select version in "${versions_dir_entries[@]##*/}"; do
-    if [ ! -z $version ]; then
-        break ;
+  local work=""
+  local git_repos=""
+  local use_artlogin=""
+  local version_name=""
+  local version_dir=""
+  local template_artlogin="${ARTENV_ROOT}/libexec/artlogin.sh"
+
+  [[ -n "${env_name}" ]] || die "environment name is empty"
+  [[ "${env_name}" != */* ]] || die "environment name must not contain /"
+  [[ "${env_name}" != "." && "${env_name}" != ".." ]] || die "invalid environment name"
+  [[ ! -e "${env_dir}" ]] || die "${env_name} already exists"
+
+  require_dir "${versions_dir}"
+
+  local -a version_entries=()
+  local -a version_names=()
+  local entry
+
+  shopt -s nullglob
+  version_entries=("${versions_dir}"/*)
+  shopt -u nullglob
+
+  [[ ${#version_entries[@]} -gt 0 ]] || die "no artemis versions are registered"
+
+  for entry in "${version_entries[@]}"; do
+    [[ -d "${entry}" ]] || continue
+    version_names+=("$(basename "${entry}")")
+  done
+
+  [[ ${#version_names[@]} -gt 0 ]] || die "no artemis versions are registered"
+
+  echo "Select the artemis version"
+  select version_name in "${version_names[@]}"; do
+    if [[ -n "${version_name:-}" ]]; then
+      version_dir="${versions_dir}/${version_name}"
+      break
     else
-        echo "Wrong selection"
+      echo "Wrong selection"
     fi
-done
+  done
 
-echo "${version} was selected"
-version="${versions_dir}/${version}"
+  require_dir "${version_dir}"
+  echo "${version_name} was selected"
 
-read -e -p "Enter the path to working directory> " work
-if [ -d "$work" ]; then
-    work="$(realpath $work)"
-else
-    echo "${work} dose not exist"
-    exit 1
-fi
+  read -e -r -p "Enter the path to working directory> " work
+  require_dir "${work}"
+  work="$(resolve_path "${work}")"
 
-while true; do
-    read -e -p "Use artlogin? (y/n)> " use_artlogin
-    case $use_artlogin in
-        y)
-            mkdir -p $env_dir
-            read -e -p "Enter the path to git repos (required)> " git_repos
-            ln -s $version ${env_dir}/version
-            ln -s $work ${env_dir}/work
-            ln -s $git_repos ${env_dir}/git_repos
-            cp $ARTENV_ROOT/libexec/artlogin.sh ${env_dir}/
-            break
-            ;;
-        n)
-            mkdir -p $env_dir
-            read -e -p "Enter the path to git repos (optional)> " git_repos
-            ln -s $version ${env_dir}/version
-            ln -s $work ${env_dir}/work
-            if [  $git_repos ]; then
-                ln -s $git_repos ${env_dir}/git_repos
-            fi
-            break
-            ;;
+  while true; do
+    read -e -r -p "Use artlogin? (y/n)> " use_artlogin
+    case "${use_artlogin}" in
+      y|Y)
+        require_file "${template_artlogin}"
+        read -e -r -p "Enter the path to git repos (required)> " git_repos
+        [[ -n "${git_repos}" ]] || die "git repos is required when artlogin is enabled"
+        break
+        ;;
+      n|N)
+        read -e -r -p "Enter the path to git repos (optional)> " git_repos
+        break
+        ;;
+      *)
+        echo "Please answer y or n"
+        ;;
     esac
-done
+  done
 
-echo "${env} was registered"
+  ensure_dir "${ARTENV_ROOT}/envs"
+  tmp_dir="$(mktemp -d "${ARTENV_ROOT}/envs/.tmp.${env_name}.XXXXXX")"
+  trap 'rm -rf -- "${tmp_dir}"' EXIT
+
+  ln -s -- "${version_dir}" "${tmp_dir}/version"
+  ln -s -- "${work}" "${tmp_dir}/work"
+
+  if [[ -n "${git_repos:-}" ]]; then
+    printf '%s\n' "${git_repos}" > "${tmp_dir}/git_repos"
+  fi
+
+  if [[ "${use_artlogin}" == "y" || "${use_artlogin}" == "Y" ]]; then
+    cp -- "${template_artlogin}" "${tmp_dir}/artlogin.sh"
+  fi
+
+  mv -- "${tmp_dir}" "${env_dir}"
+  trap - EXIT
+
+  printf '%s was registered\n' "${env_name}"
+}
+
+main "$@"
 

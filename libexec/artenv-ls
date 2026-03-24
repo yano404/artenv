@@ -4,7 +4,7 @@ set -e
 
 envs_dir="${ARTENV_ROOT}/envs"
 
-if [ -d "$envs_dir" ]; then
+if [[ -d "${envs_dir}" ]]; then
     envs_dir="$(realpath "$envs_dir")"
 else
     echo "${ARTENV_ROOT}/envs not found"
@@ -18,7 +18,7 @@ envs_dir_entries=("$envs_dir"/*)
 
 for path in "${envs_dir_entries[@]}"; do
     env=${path##*/}
-    if [ $env == $current_env ]; then
+    if [[ "${env}" == "${current_env}" ]]; then
         echo "${hit_prefix}${env}"
     else
         echo "${miss_prefix}${env}"
