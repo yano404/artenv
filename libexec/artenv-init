@@ -1,20 +1,22 @@
 #!/usr/bin/env bash
 
-set -e
+set -euo pipefail
 
 function main() {
-    if [ -z $ARTENV_ROOT ]; then
-        echo "export ARTENV_ROOT=$HOME/.artenv"
+    if [[ -z "${ARTENV_ROOT:-}" ]]; then
+        # shellcheck disable=SC2016
+        echo 'export ARTENV_ROOT="$HOME/.artenv"'
     fi
-    
-    if [ ! -d "${ARTENV_ROOT}" ] || [ ! -d "${ARTENV_ROOT}/versions" ] || [ ! -d "${ARTENV_ROOT}/envs" ]; then
-        init_dirs
-    fi
-    
-    if [ -d "${ARTENV_ROOT}/env" ]; then
+
+    : "${ARTENV_ROOT:=${HOME}/.artenv}"
+
+    [[ -d "${ARTENV_ROOT}/versions" ]] || mkdir -p -- "${ARTENV_ROOT}/versions"
+    [[ -d "${ARTENV_ROOT}/envs"     ]] || mkdir -p -- "${ARTENV_ROOT}/envs"
+
+    if [[ -L "${ARTENV_ROOT}/env" || -e "${ARTENV_ROOT}/env" ]]; then
         env=$(readlink "${ARTENV_ROOT}/env")
-        env=$(basename $env)
-        source artenv-sh-shell $env
+        env=$(basename "${env}")
+        source artenv-sh-shell "${env}"
     fi
 
     cat << 'EOS'
@@ -32,10 +34,6 @@ artenv() {
 }
 EOS
     exit 0
-}
-
-function init_dirs() {
-    mkdir -p "${ARTENV_ROOT}/"{versions,envs}
 }
 
 main

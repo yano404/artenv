@@ -1,56 +1,106 @@
 #!/usr/bin/env bash
+set -euo pipefail
 
-set -e
+script_dir="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
+# shellcheck source=/dev/null
+source "${script_dir}/util.sh"
 
-if [ $# == 0 ]; then
-    env=$ART_PROJECT
-    art_version=$ART_VERSION
-    artsys=$TARTSYS
-    rootsys=$ROOTSYS
-    yamllib=$YAML_CPP_LIB
-    analysis_dir=$ART_ANALYSIS_DIR
-    work_dir=$ART_WORK_DIR
-    git_repos=$ART_REPOS
-    use_artlogin=$USE_ARTLOGIN
-elif [ $# == 1 ]; then
-    env=$1
-    env_dir="${ARTENV_ROOT}/envs/${env}"
+validate_version_dir() {
+  local version_dir="$1"
 
-    if [ ! -d "$env_dir" ]; then
-        echo "${env} not found"
-        exit 1
-    fi
-    ver_dir=$(readlink "${env_dir}/version")
-    art_version=$(basename "$ver_dir")
-    artsys=$(realpath "${ver_dir}/artsys")
-    rootsys=$(realpath "${ver_dir}/rootsys")
-    yamllib=$(realpath "${ver_dir}/yamllib")
-    analysis_dir=$(realpath "${env_dir}/work")
-    work_dir=$(realpath "${env_dir}/work")
-    git_repos=""
-    if [ -e "${env_dir}/git_repos" ]; then
-        git_repos=$(realpath "${env_dir}/git_repos")
-    elif [ -L "${env_dir}/git_repos" ]; then
-        git_repos=$(readlink "${env_dir}/git_repos")
-    fi
-    use_artlogin=NO
-    if [ -e "${env_dir}/artlogin.sh" ]; then
-        use_artlogin=YES
-    fi
-else
-    echo "artenv info"
-    echo "artenv info <env-name>"
-    exit 1
-fi
+  require_dir "${version_dir}"
+  require_exists "${version_dir}/artsys"
+  require_exists "${version_dir}/rootsys"
+  require_exists "${version_dir}/yamllib"
+  require_exists "${version_dir}/yamlcmake"
+}
 
-echo "- env: ${env##*/}"
-echo "- artemis version: ${art_version}"
-echo "  - artemis: ${artsys}"
-echo "  - root: ${rootsys}"
-echo "  - yaml-cpp: ${yamllib}"
-echo "- analysis directory: ${analysis_dir}"
-echo "- working directory: ${work_dir}"
-echo "- git repository: ${git_repos}"
-echo "- use artlogin: ${use_artlogin}"
-exit 0
+validate_env_dir() {
+  local env_dir="$1"
+
+  require_dir "${env_dir}"
+  require_exists "${env_dir}/version"
+  require_exists "${env_dir}/work"
+
+  local version_dir
+  version_dir="$(resolve_path "${env_dir}/version")"
+  validate_version_dir "${version_dir}"
+}
+
+status_of_path() {
+  local path="$1"
+  if [[ -e "${path}" ]]; then
+    printf '[OK]'
+  else
+    printf '[NG]'
+  fi
+}
+
+main() {
+  [[ $# -le 1 ]] || die "usage: artenv info [env]"
+
+  local env=""
+  local art_version=""
+  local artsys=""
+  local rootsys=""
+  local yamllib=""
+  local yamlcmake=""
+  local analysis_dir=""
+  local work_dir=""
+  local git_repos=""
+  local use_artlogin="NO"
+
+  if [[ $# -eq 0 ]]; then
+    [[ -n "${ART_PROJECT:-}" ]] || die "ART_PROJECT is not set"
+    [[ -n "${ART_VERSION:-}" ]] || die "ART_VERSION is not set"
+    [[ -n "${TARTSYS:-}" ]] || die "TARTSYS is not set"
+    [[ -n "${ROOTSYS:-}" ]] || die "ROOTSYS is not set"
+    [[ -n "${YAML_CPP_LIB:-}" ]] || die "YAML_CPP_LIB is not set"
+    [[ -n "${YAML_CPP_CMAKE:-}" ]] || die "YAML_CPP_CMAKE is not set"
+    [[ -n "${ART_ANALYSIS_DIR:-}" ]] || die "ART_ANALYSIS_DIR is not set"
+    [[ -n "${ART_WORK_DIR:-}" ]] || die "ART_WORK_DIR is not set"
+    [[ -n "${USE_ARTLOGIN:-}" ]] || die "USE_ARTLOGIN is not set"
+
+    env="${ART_PROJECT}"
+    art_version="${ART_VERSION}"
+    artsys="${TARTSYS}"
+    rootsys="${ROOTSYS}"
+    yamllib="${YAML_CPP_LIB}"
+    yamlcmake="${YAML_CPP_CMAKE}"
+    analysis_dir="${ART_ANALYSIS_DIR}"
+    work_dir="${ART_WORK_DIR}"
+    git_repos="${ART_REPOS:-}"
+    use_artlogin="${USE_ARTLOGIN}"
+  else
+    [[ -n "${ARTENV_ROOT:-}" ]] || die "ARTENV_ROOT is not set"
+  
+    env="$1"
+    local env_dir="${ARTENV_ROOT}/envs/${env}"
+  
+    load_env_metadata "${env_dir}"
+  
+    art_version="${ENV_VERSION_NAME}"
+    artsys="${ENV_ARTSYS}"
+    rootsys="${ENV_ROOTSYS}"
+    yamllib="${ENV_YAMLLIB}"
+    yamlcmake="${ENV_YAMLCMAKE}"
+    analysis_dir="${ENV_WORK_DIR}"
+    work_dir="${ENV_WORK_DIR}"
+    git_repos="${ENV_GIT_REPOS}"
+    use_artlogin="${ENV_USE_ARTLOGIN}"
+  fi
+
+  printf '%s\n' "- env: ${env##*/}"
+  printf '%s\n' "- artemis version: ${art_version}"
+  printf '%s\n' "  - artemis: ${artsys} $(status_of_path "${artsys}")"
+  printf '%s\n' "  - root: ${rootsys} $(status_of_path "${rootsys}")"
+  printf '%s\n' "  - yaml-cpp lib: ${yamllib} $(status_of_path "${yamllib}")"
+  printf '%s\n' "  - yaml-cpp cmake: ${yamlcmake} $(status_of_path "${yamlcmake}")"
+  printf '%s\n' "- analysis directory: ${analysis_dir} $(status_of_path "${analysis_dir}")"
+  printf '%s\n' "- working directory: ${work_dir} $(status_of_path "${work_dir}")"
+  printf '%s\n' "- git repository: ${git_repos}"
+  printf '%s\n' "- use artlogin: ${use_artlogin}"
+}
+
+main "$@"
 

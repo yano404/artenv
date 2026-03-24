@@ -1,0 +1,194 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+script_dir="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
+# shellcheck source=/dev/null
+source "${script_dir}/util.sh"
+
+print_ok() {
+  printf '  [OK] %s\n' "$1"
+}
+
+print_ng() {
+  printf '  [NG] %s\n' "$1"
+}
+
+check_exists() {
+  local label="$1"
+  local path="$2"
+
+  if [[ -e "${path}" || -L "${path}" ]]; then
+    print_ok "${label}: ${path}"
+    return 0
+  else
+    print_ng "${label}: ${path}"
+    return 1
+  fi
+}
+
+check_dir() {
+  local label="$1"
+  local path="$2"
+
+  if [[ -d "${path}" ]]; then
+    print_ok "${label}: ${path}"
+    return 0
+  else
+    print_ng "${label}: ${path}"
+    return 1
+  fi
+}
+
+check_file() {
+  local label="$1"
+  local path="$2"
+
+  if [[ -f "${path}" ]]; then
+    print_ok "${label}: ${path}"
+    return 0
+  else
+    print_ng "${label}: ${path}"
+    return 1
+  fi
+}
+
+check_resolved_dir() {
+  local label="$1"
+  local path="$2"
+  local resolved=""
+
+  if resolved="$(resolve_path "${path}" 2>/dev/null)" && [[ -d "${resolved}" ]]; then
+    print_ok "${label}: ${resolved}"
+    return 0
+  else
+    print_ng "${label}: ${path}"
+    return 1
+  fi
+}
+
+check_git_repos() {
+  local env_dir="$1"
+  local git_value=""
+
+  if git_value="$(read_git_repos "${env_dir}/git_repos" 2>/dev/null)"; then
+    if [[ -n "${git_value}" ]]; then
+      print_ok "git_repos: ${git_value}"
+    else
+      print_ng "git_repos: empty"
+    fi
+  else
+    print_ok "git_repos: not set"
+  fi
+}
+
+doctor_env() {
+  local env_name="$1"
+  local env_dir="${ARTENV_ROOT}/envs/${env_name}"
+  local version_link="${env_dir}/version"
+  local work_link="${env_dir}/work"
+  local version_dir=""
+  local resolved_rootsys=""
+  local ok=0
+
+  printf 'env: %s\n' "${env_name}"
+
+  check_dir "env dir" "${env_dir}" || ok=1
+  check_exists "version link" "${version_link}" || ok=1
+  check_exists "work link" "${work_link}" || ok=1
+
+  if version_dir="$(resolve_path "${version_link}" 2>/dev/null)"; then
+    check_dir "version dir" "${version_dir}" || ok=1
+
+    check_exists "artsys link" "${version_dir}/artsys" || ok=1
+    check_exists "rootsys link" "${version_dir}/rootsys" || ok=1
+    check_exists "yamllib link" "${version_dir}/yamllib" || ok=1
+    check_exists "yamlcmake link" "${version_dir}/yamlcmake" || ok=1
+
+    check_resolved_dir "artsys" "${version_dir}/artsys" || ok=1
+    check_resolved_dir "rootsys" "${version_dir}/rootsys" || ok=1
+    check_resolved_dir "yamllib" "${version_dir}/yamllib" || ok=1
+    check_resolved_dir "yamlcmake" "${version_dir}/yamlcmake" || ok=1
+
+    if resolved_rootsys="$(resolve_path "${version_dir}/rootsys" 2>/dev/null)"; then
+      check_file "root-config" "${resolved_rootsys}/bin/root-config" || ok=1
+    else
+      print_ng "root-config: ROOTSYS could not be resolved"
+      ok=1
+    fi
+  else
+    print_ng "version dir: could not resolve ${version_link}"
+    ok=1
+  fi
+
+  check_resolved_dir "work dir" "${work_link}" || ok=1
+  check_git_repos "${env_dir}"
+
+  if [[ -f "${env_dir}/artlogin.sh" ]]; then
+    print_ok "artlogin.sh: ${env_dir}/artlogin.sh"
+  else
+    print_ok "artlogin.sh: not set"
+  fi
+
+  if [[ ${ok} -eq 0 ]]; then
+    printf 'result: OK\n'
+  else
+    printf 'result: NG\n'
+  fi
+
+  printf '\n'
+  return "${ok}"
+}
+
+doctor_current() {
+  [[ -n "${ART_PROJECT:-}" ]] || die "ART_PROJECT is not set"
+  doctor_env "${ART_PROJECT}"
+}
+
+doctor_all() {
+  local envs_dir="${ARTENV_ROOT}/envs"
+  local -a entries=()
+  local entry
+  local name
+  local failed=0
+
+  check_dir "envs dir" "${envs_dir}" >/dev/null 2>&1 || die "envs directory not found: ${envs_dir}"
+
+  shopt -s nullglob
+  entries=("${envs_dir}"/*)
+  shopt -u nullglob
+
+  if [[ ${#entries[@]} -eq 0 ]]; then
+    die "no environments are registered"
+  fi
+
+  for entry in "${entries[@]}"; do
+    [[ -d "${entry}" ]] || continue
+    name="$(basename "${entry}")"
+    if ! doctor_env "${name}"; then
+      failed=1
+    fi
+  done
+
+  return "${failed}"
+}
+
+main() {
+  [[ -n "${ARTENV_ROOT:-}" ]] || die "ARTENV_ROOT is not set"
+  [[ $# -le 1 ]] || die "usage: artenv doctor [env|--all]"
+
+  if [[ $# -eq 0 ]]; then
+    doctor_current
+    exit $?
+  fi
+
+  case "$1" in
+    --all)
+      doctor_all
+      ;;
+    *)
+      doctor_env "$1"
+      ;;
+  esac
+}
+
+main "$@"

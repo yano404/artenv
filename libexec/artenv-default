@@ -1,32 +1,31 @@
 #!/usr/bin/env bash
+set -euo pipefail
 
-set -e
+script_dir="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
+# shellcheck source=/dev/null
+source "${script_dir}/util.sh"
 
-if [ $# -gt 1 ]; then
-    echo "artenv default"
-    echo "artenv default <env-name>"
-    exit 1
-fi
+main() {
+  [[ -n "${ARTENV_ROOT:-}" ]] || die "ARTENV_ROOT is not set"
+  [[ $# -le 1 ]] || die "usage: artenv default [env]"
 
-if [ $# == 0 ]; then
-    env=$(readlink ${ARTENV_ROOT}/env)
-    echo ${env##*/}
+  local target="${ARTENV_ROOT}/env"
+
+  if [[ $# -eq 0 ]]; then
+    [[ -L "${target}" ]] || die "default environment is not set"
+    local env_link
+    env_link="$(readlink -- "${target}")"
+    printf '%s\n' "${env_link##*/}"
     exit 0
-fi
+  fi
 
-env=$1
-env_dir="${ARTENV_ROOT}/envs/${env}"
+  local env="$1"
+  local env_dir="${ARTENV_ROOT}/envs/${env}"
 
-if [ ! -d "$env_dir" ]; then
-    echo "${env} not found"
-    exit 1
-fi
+  [[ -n "${env}" ]] || die "environment name is empty"
+  [[ -d "${env_dir}" ]] || die "environment not found: ${env}"
 
-target="${ARTENV_ROOT}/env"
+  ln -sfn -- "${env_dir}" "${target}"
+}
 
-if [ -L $target ]; then
-    unlink $target
-fi
-
-ln -s $env_dir $target
-exit 0
+main "$@"

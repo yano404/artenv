@@ -1,85 +1,73 @@
 #!/usr/bin/env bash
 
-set -e
+set -euo pipefail
 
-if [ $# != 1 ]; then
-    echo "artenv register-version <version-name>"
-    exit 1
-fi
+script_dir="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
+# shellcheck source=/dev/null
+source "${script_dir}/util.sh"
 
-version=$1
-version_dir="${ARTENV_ROOT}/versions/${version}"
+main() {
+  [[ -n "${ARTENV_ROOT:-}" ]] || die "ARTENV_ROOT is not set"
+  [[ $# -eq 1 ]] || die "usage: artenv register-version <version>"
 
-if [ -d "${version_dir}" ]; then
-    echo "${version} already exists"
-    exit 1
-fi
+  local version="$1"
+  local version_dir="${ARTENV_ROOT}/versions/${version}"
+  local tmp_dir
 
-read -e -p "Enter the path to artemis> " artsys
+  local artsys=""
+  local rootsys=""
+  local yamlcpp=""
+  local yamllib=""
+  local yamlcmake=""
 
-if [ -d "$artsys" ]; then
-    artsys=$(realpath $artsys)
-else
-    echo "${artsys} does not exist"
-    exit 1
-fi
+  [[ ! -e "${version_dir}" ]] || die "${version} already exists"
 
-if [ ! -d "${artsys}/bin" ]; then
-    echo "${artsys}/bin does not exit"
-    exit 1
-fi
+  read -e -r -p "Enter the path to artemis> " artsys
+  require_dir "${artsys}"
+  artsys="$(resolve_path "${artsys}")"
+  require_dir "${artsys}/bin"
+  require_dir "${artsys}/lib"
 
-if [ ! -d "${artsys}/lib" ]; then
-    echo "${artsys}/lib does not exit"
-    exit 1
-fi
+  read -e -r -p "Enter the path to root> " rootsys
+  require_dir "${rootsys}"
+  rootsys="$(resolve_path "${rootsys}")"
+  require_dir "${rootsys}/bin"
+  require_dir "${rootsys}/lib"
+  require_file "${rootsys}/bin/root-config"
 
-read -e -p "Enter the path to root> " rootsys
+  read -e -r -p "Enter the path to yaml-cpp> " yamlcpp
+  require_dir "${yamlcpp}"
+  yamlcpp="$(resolve_path "${yamlcpp}")"
 
-if [ -d "$rootsys" ]; then
-    rootsys=$(realpath $rootsys)
-else
-    echo "${rootsys} does not exist"
-    exit 1
-fi
+  if [[ -d "${yamlcpp}/lib" ]]; then
+    yamllib="$(resolve_path "${yamlcpp}/lib")"
+  elif [[ -d "${yamlcpp}/lib64" ]]; then
+    yamllib="$(resolve_path "${yamlcpp}/lib64")"
+  else
+    die "Could not find yaml-cpp library in ${yamlcpp}"
+  fi
 
-if [ ! -d "${rootsys}/bin" ]; then
-    echo "${rootsys}/bin does not exit"
-    exit 1
-fi
+  if [[ -d "${yamllib}/cmake/yaml-cpp" ]]; then
+    yamlcmake="$(resolve_path "${yamllib}/cmake")"
+  elif [[ -d "${yamlcpp}/share/cmake/yaml-cpp" ]]; then
+    yamlcmake="$(resolve_path "${yamlcpp}/share/cmake")"
+  else
+    die "Could not find yaml-cpp CMake config in ${yamlcpp}"
+  fi
 
-if [ ! -d "${rootsys}/lib" ]; then
-    echo "${rootsys}/lib does not exit"
-    exit 1
-fi
+  ensure_dir "${ARTENV_ROOT}/versions"
+  tmp_dir="$(mktemp -d "${ARTENV_ROOT}/versions/.tmp.${version}.XXXXXX")"
+  trap 'rm -rf -- "${tmp_dir}"' EXIT
 
-read -e -p "Enter the path to yaml-cpp> " yamlcpp
+  ln -s -- "${artsys}"    "${tmp_dir}/artsys"
+  ln -s -- "${rootsys}"   "${tmp_dir}/rootsys"
+  ln -s -- "${yamllib}"   "${tmp_dir}/yamllib"
+  ln -s -- "${yamlcmake}" "${tmp_dir}/yamlcmake"
 
-if [ -d "$yamlcpp" ]; then
-    # find lib
-    if [ -d "${yamlcpp}/lib" ]; then
-        yamllib=$(realpath "${yamlcpp}/lib");
-    elif [ -d "${yamlcpp}/lib64" ]; then
-        yamllib=$(realpath "${yamlcpp}/lib64");
-    else
-        echo "Could not find yaml-cpp library in ${yamlcpp}"
-        exit 1
-    fi
-    # find cmake config
-    if [ -d "${yamllib}/cmake/yaml-cpp" ]; then
-        yamlcmake=$(realpath "${yamllib}/cmake");
-    elif [ -d "${yamlcpp}/share/cmake/yaml-cpp" ]; then
-        yamlcmake=$(realpath "${yamlcpp}/share/cmake");
-    fi
-else
-    echo "${yamlcpp} does not exist"
-    exit 1
-fi
+  mv -- "${tmp_dir}" "${version_dir}"
+  trap - EXIT
 
-mkdir -p $version_dir
-ln -s $artsys ${version_dir}/artsys
-ln -s $rootsys ${version_dir}/rootsys
-ln -s $yamllib ${version_dir}/yamllib
-ln -s $yamlcmake ${version_dir}/yamlcmake
-echo "${version} was registered"
+  printf '%s was registered\n' "${version}"
+}
 
+main "$@"
