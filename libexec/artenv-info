@@ -34,7 +34,7 @@ elif [ $# == 1 ]; then
         git_repos=$(readlink "${env_dir}/git_repos")
     fi
     use_artlogin=NO
-    if [ -e "${env_dir}/art_login.sh" ]; then
+    if [ -e "${env_dir}/artlogin.sh" ]; then
         use_artlogin=YES
     fi
 else
