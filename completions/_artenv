@@ -1,0 +1,34 @@
+#compdef artenv
+
+_artenv_list_commands() {
+  command artenv commands 2>/dev/null
+}
+
+_artenv_list_envs() {
+  [[ -n "${ARTENV_ROOT:-}" && -d "${ARTENV_ROOT}/envs" ]] || return 0
+  command ls -1 "${ARTENV_ROOT}/envs" 2>/dev/null
+}
+
+_artenv() {
+  local -a commands envs
+
+  commands=("${(@f)$(_artenv_list_commands)}")
+  envs=("${(@f)$(_artenv_list_envs)}")
+
+  if (( CURRENT == 2 )); then
+    compadd -- "${commands[@]}"
+    return 0
+  fi
+
+  case "${words[2]}" in
+    shell|default|info|doctor)
+      compadd -- "${envs[@]}"
+      return 0
+      ;;
+    *)
+      return 0
+      ;;
+  esac
+}
+
+compdef _artenv artenv
