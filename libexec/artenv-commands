@@ -1,0 +1,32 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+script_dir="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
+
+main() {
+  local entry
+  local name
+
+  for entry in "${script_dir}"/artenv-*; do
+    [[ -e "${entry}" ]] || continue
+    [[ -f "${entry}" ]] || continue
+    [[ -x "${entry}" ]] || continue
+
+    name="$(basename "${entry}")"
+    name="${name#artenv-}"
+
+    case "${name}" in
+      sh-shell)
+        printf 'shell\n'
+        ;;
+      sh-*)
+        continue
+        ;;
+      *)
+        printf '%s\n' "${name}"
+        ;;
+    esac
+  done | sort -u
+}
+
+main "$@"

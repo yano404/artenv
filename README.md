@@ -12,12 +12,28 @@ git clone https://github.com/yano404/artenv.git ~/.artenv
 
 ## Setup
 
-Add to `.bashrc` or `.zshrc` :
+### Bash
 
-```sh
+Add to `.bashrc` :
+
+```
 export ARTENV_ROOT="$HOME/.artenv"
 export PATH="$ARTENV_ROOT/bin:$PATH"
 eval "$(artenv init)"
+source "${ARTENV_ROOT}/completions/artenv.bash"
+```
+
+### Zsh
+
+Add to `.zshrc` :
+
+```zsh
+export ARTENV_ROOT="$HOME/.artenv"
+export PATH="$ARTENV_ROOT/bin:$PATH"
+eval "$(artenv init)"
+fpath=("${ARTENV_ROOT}/completions" $fpath)
+autoload -Uz compinit
+compinit
 ```
 
 Restart your shell.
