@@ -1,12 +1,20 @@
 #!/usr/bin/env bash
-# Use git hash as version
 
 set -euo pipefail
 
-if [[ -n "${ARTENV_ROOT}" ]]; then
-    cd "${ARTENV_ROOT}" || exit 1
-    git_rev=$(git rev-parse HEAD)
-    echo "artenv: ${git_rev}"
-else
-    echo "ARTENV_ROOT is not set"
+version='v1.0.0'
+
+script_dir="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
+repo_root="$(cd -- "${script_dir}/.." && pwd)"
+
+revision="unknown"
+dirty=""
+
+if command -v git >/dev/null 2>&1 && git -C "${repo_root}" rev-parse --is-inside-work-tree >/dev/null 2>&1; then
+  revision="$(git -C "${repo_root}" rev-parse --short HEAD)"
+  if ! git -C "${repo_root}" diff --quiet --ignore-submodules HEAD --; then
+    dirty="-dirty"
+  fi
 fi
+
+printf 'artenv %s (%s%s)\n' "${version}" "${revision}" "${dirty}"
