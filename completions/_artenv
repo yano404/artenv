@@ -5,15 +5,27 @@ _artenv_list_commands() {
 }
 
 _artenv_list_envs() {
-  [[ -n "${ARTENV_ROOT:-}" && -d "${ARTENV_ROOT}/envs" ]] || return 0
-  command ls -1 "${ARTENV_ROOT}/envs" 2>/dev/null
+  [[ -n "${ARTENV_ROOT:-}" && -d "${ARTENV_ROOT}/envs" ]] || return
+  local f
+  for f in "${ARTENV_ROOT}/envs"/*.toml(N); do
+    basename "${f}" .toml
+  done
+}
+
+_artenv_list_versions() {
+  [[ -n "${ARTENV_ROOT:-}" && -d "${ARTENV_ROOT}/versions" ]] || return
+  local f
+  for f in "${ARTENV_ROOT}/versions"/*.toml(N); do
+    basename "${f}" .toml
+  done
 }
 
 _artenv() {
-  local -a commands envs
+  local -a commands envs versions
 
   commands=("${(@f)$(_artenv_list_commands)}")
   envs=("${(@f)$(_artenv_list_envs)}")
+  versions=("${(@f)$(_artenv_list_versions)}")
 
   if (( CURRENT == 2 )); then
     compadd -- "${commands[@]}"
@@ -21,8 +33,16 @@ _artenv() {
   fi
 
   case "${words[2]}" in
-    shell|default|info|doctor)
+    shell|default|info)
       compadd -- "${envs[@]}"
+      return 0
+      ;;
+    doctor)
+      compadd -- --all "${envs[@]}"
+      return 0
+      ;;
+    install)
+      compadd -- --native --apptainer --update --list -l --help -h
       return 0
       ;;
     *)

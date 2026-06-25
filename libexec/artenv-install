@@ -1,0 +1,441 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+script_dir="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
+# shellcheck source=/dev/null
+source "${script_dir}/util.sh"
+
+print_var() {
+  local name="$1"
+  local value="$2"
+  printf '  %-22s %s\n' "${name}" "${value}"
+}
+
+confirm_yes() {
+  local prompt="$1"
+  local ans=""
+  read -r -p "${prompt}" ans
+  case "${ans}" in
+    y|Y|yes|YES) return 0 ;;
+    *)            return 1 ;;
+  esac
+}
+
+_ARTENV_INSTALL_REGISTRY="ghcr.io"
+_ARTENV_INSTALL_IMAGE="yano404/artemis_apptainer"
+_ARTENV_INSTALL_SCHEME="oras"
+
+print_help() {
+  cat << 'EOS'
+Usage: artenv install [OPTIONS] [TAG]
+
+Arguments:
+  TAG           Image tag to install (e.g. latest, v1.2.3)
+                If specified, skips URI/version/SIF prompts
+
+Options:
+  --apptainer          Pull Apptainer image from registry and register (default)
+  --native             Build artemis from source and register
+  --update <version>   Re-pull the Apptainer image for an existing version
+  -l, --list           List available versions in the registry
+  -h, --help           Show this help message
+EOS
+}
+
+fetch_manifest_digest() {
+  local uri="$1"
+  require_yq
+  command -v curl >/dev/null 2>&1 || return 1
+
+  local _curl="curl -sf --max-time 30 --connect-timeout 10"
+  local accept="application/vnd.oci.image.index.v1+json,application/vnd.oci.image.manifest.v1+json,application/vnd.docker.distribution.manifest.v2+json"
+
+  local rest="${uri#*://}"
+  local registry="${rest%%/*}"
+  local remainder="${rest#*/}"
+  local image tag
+  if [[ "${remainder}" == *:* ]]; then
+    tag="${remainder##*:}"
+    image="${remainder%:*}"
+  else
+    tag="latest"
+    image="${remainder}"
+  fi
+
+  local token
+  token="$(${_curl} \
+    "https://${registry}/token?scope=repository:${image}:pull&service=${registry}" \
+    | yq -p json -oy -r '.token')" || return 1
+  [[ -n "${token}" ]] || return 1
+
+  ${_curl} -I \
+    -H "Authorization: Bearer ${token}" \
+    -H "Accept: ${accept}" \
+    "https://${registry}/v2/${image}/manifests/${tag}" \
+    | grep -i '^docker-content-digest:' | tr -d '\r\n' | sed 's/.*: //'
+}
+
+list_versions() {
+  require_yq
+  command -v curl >/dev/null 2>&1 || die "curl is required for --list"
+
+  local accept="application/vnd.oci.image.index.v1+json,application/vnd.oci.image.manifest.v1+json,application/vnd.docker.distribution.manifest.v2+json"
+
+  local _curl="curl -sf --max-time 30 --connect-timeout 10"
+
+  local token
+  token="$(${_curl} \
+    "https://${_ARTENV_INSTALL_REGISTRY}/token?scope=repository:${_ARTENV_INSTALL_IMAGE}:pull&service=${_ARTENV_INSTALL_REGISTRY}" \
+    | yq -p json -oy -r '.token')"
+  [[ -n "${token}" ]] || die "failed to get registry token"
+
+  local -a tags
+  mapfile -t tags < <(
+    ${_curl} \
+      -H "Authorization: Bearer ${token}" \
+      "https://${_ARTENV_INSTALL_REGISTRY}/v2/${_ARTENV_INSTALL_IMAGE}/tags/list" \
+      | yq -p json -oy -r '.tags[]' | sort
+  )
+
+  local tmpdir tag digest
+  tmpdir="$(mktemp -d)"
+
+  for tag in "${tags[@]}"; do
+    (
+      digest="$(${_curl} -I \
+        -H "Authorization: Bearer ${token}" \
+        -H "Accept: ${accept}" \
+        "https://${_ARTENV_INSTALL_REGISTRY}/v2/${_ARTENV_INSTALL_IMAGE}/manifests/${tag}" \
+        | grep -i '^docker-content-digest:' | tr -d '\r\n' | sed 's/.*: //')"
+      [[ -n "${digest}" ]] && printf '%s\n' "${digest}" > "${tmpdir}/${tag}"
+    ) &
+  done
+  wait || true
+
+  declare -A digest_map
+  for tag in "${tags[@]}"; do
+    if [[ -f "${tmpdir}/${tag}" ]]; then
+      digest="$(< "${tmpdir}/${tag}")"
+      digest_map["${digest}"]+="${tag} "
+    fi
+  done
+
+  local -a output=()
+  local canonical
+  for digest in "${!digest_map[@]}"; do
+    local -a group_tags
+    read -r -a group_tags <<< "${digest_map[${digest}]}"
+    canonical="$(printf '%s\n' "${group_tags[@]}" \
+      | awk '{print length" "$0}' | sort -rn | head -1 | cut -d' ' -f2-)"
+    for tag in "${group_tags[@]}"; do
+      if [[ "${tag}" == "${canonical}" ]]; then
+        output+=("${canonical}")
+      else
+        output+=("${tag} -> ${canonical}")
+      fi
+    done
+  done
+
+  rm -rf -- "${tmpdir}"
+  printf '%s\n' "${output[@]}" | sort
+}
+
+main_apptainer() {
+  local tag="${1:-}"
+
+  [[ -n "${ARTENV_ROOT:-}" ]] || die "ARTENV_ROOT is not set"
+  command -v apptainer >/dev/null 2>&1 || die "apptainer command not found"
+
+  local uri="" version="" sif_path=""
+
+  if [[ -n "${tag}" ]]; then
+    uri="${_ARTENV_INSTALL_SCHEME}://${_ARTENV_INSTALL_REGISTRY}/${_ARTENV_INSTALL_IMAGE}:${tag}"
+    version="${_ARTENV_INSTALL_IMAGE##*/}-${tag}"
+    sif_path="${ARTENV_ROOT}/images/${version}.sif"
+  else
+    local default_uri="${_ARTENV_INSTALL_SCHEME}://${_ARTENV_INSTALL_REGISTRY}/${_ARTENV_INSTALL_IMAGE}:latest"
+    read -e -r -p "Enter the pull URI [${default_uri}]> " uri
+    uri="${uri:-${default_uri}}"
+
+    read -r -p "Enter the version name> " version
+    [[ -n "${version}" ]] || die "version name is empty"
+    [[ "${version}" != */* ]] || die "version name must not contain /"
+    [[ "${version}" != "." && "${version}" != ".." ]] || die "invalid version name"
+
+    local default_sif="${ARTENV_ROOT}/images/${version}.sif"
+    read -e -r -p "Enter the path to save SIF [${default_sif}]> " sif_path
+    sif_path="${sif_path:-${default_sif}}"
+  fi
+
+  local version_conf="${ARTENV_ROOT}/versions/${version}.toml"
+  [[ ! -e "${version_conf}" ]] || die "${version} already exists"
+
+  printf '%s\n' "Configuration:"
+  print_var "URI"          "${uri}"
+  print_var "VERSION"      "${version}"
+  print_var "SIF"          "${sif_path}"
+
+  if ! confirm_yes "OK? (y/N)> "; then
+    exit 0
+  fi
+
+  ensure_dir "$(dirname -- "${sif_path}")"
+  apptainer pull "${sif_path}" "${uri}"
+
+  local digest=""
+  digest="$(fetch_manifest_digest "${uri}" 2>/dev/null)" || true
+
+  ensure_dir "${ARTENV_ROOT}/versions"
+  {
+    printf '[version]\n'
+    printf 'type = "apptainer"\n'
+    printf 'uri = "%s"\n'   "${uri}"
+    printf 'image = "%s"\n' "${sif_path}"
+    [[ -n "${digest}" ]] && printf 'digest = "%s"\n' "${digest}"
+  } > "${version_conf}"
+
+  printf '%s was registered\n' "${version}"
+}
+
+main_update() {
+  local version="$1"
+  [[ -n "${ARTENV_ROOT:-}" ]] || die "ARTENV_ROOT is not set"
+  command -v apptainer >/dev/null 2>&1 || die "apptainer command not found"
+  require_yq
+
+  local version_conf="${ARTENV_ROOT}/versions/${version}.toml"
+  require_file "${version_conf}"
+
+  local version_type
+  version_type="$(yq -p toml -oy -r '.version.type // "native"' "${version_conf}")"
+  [[ "${version_type}" == "apptainer" ]] || die "${version} is not an apptainer version"
+
+  local uri image stored_digest
+  uri="$(yq -p toml -oy -r '.version.uri // ""' "${version_conf}")"
+  image="$(yq -p toml -oy -r '.version.image' "${version_conf}")"
+  stored_digest="$(yq -p toml -oy -r '.version.digest // ""' "${version_conf}")"
+
+  [[ -n "${uri}" ]]   || die "uri not stored for ${version} (registered with register-version?)"
+  [[ -n "${image}" ]] || die "image path not found for ${version}"
+
+  printf 'Checking registry...\n'
+  local remote_digest=""
+  remote_digest="$(fetch_manifest_digest "${uri}" 2>/dev/null)" || true
+
+  if [[ -n "${stored_digest}" && -n "${remote_digest}" && "${stored_digest}" == "${remote_digest}" ]]; then
+    printf '%s is already up to date (%s)\n' "${version}" "${remote_digest}"
+    exit 0
+  fi
+
+  printf '%s\n' "Update:"
+  print_var "VERSION" "${version}"
+  print_var "URI"     "${uri}"
+  print_var "SIF"     "${image}"
+  [[ -n "${remote_digest}" ]] && print_var "DIGEST" "${remote_digest}"
+
+  if ! confirm_yes "OK? (y/N)> "; then
+    exit 0
+  fi
+
+  apptainer pull --force "${image}" "${uri}"
+
+  local tmp_conf
+  tmp_conf="$(mktemp "${ARTENV_ROOT}/versions/.tmp.${version}.XXXXXX.toml")"
+  trap 'rm -f -- "${tmp_conf}"' EXIT
+  {
+    printf '[version]\n'
+    printf 'type = "apptainer"\n'
+    printf 'uri = "%s"\n'   "${uri}"
+    printf 'image = "%s"\n' "${image}"
+    [[ -n "${remote_digest}" ]] && printf 'digest = "%s"\n' "${remote_digest}"
+  } > "${tmp_conf}"
+  mv -- "${tmp_conf}" "${version_conf}"
+  trap - EXIT
+
+  printf '%s was updated\n' "${version}"
+}
+
+main_native() {
+  [[ -n "${ARTENV_ROOT:-}" ]] || die "ARTENV_ROOT is not set"
+
+  local currentdir
+  currentdir="$(pwd)"
+
+  local rootsys="" yamlcpp="" yamllib="" yamlcmake=""
+  local artsrc="" artbld="" artsys=""
+
+  local path="${PATH:-}"
+  local libpath="${LIBPATH:-}"
+  local shlib="${SHLIB_PATH:-}"
+  local ldlib="${LD_LIBRARY_PATH:-}"
+  local dyldlib="${DYLD_LIBRARY_PATH:-}"
+  local cmake_prefix_path="${CMAKE_PREFIX_PATH:-}"
+
+  local version="" version_conf=""
+
+  read -e -r -p "Enter the path to root> " rootsys
+  require_dir "${rootsys}"
+  rootsys="$(resolve_path "${rootsys}")"
+  require_dir "${rootsys}/bin"
+  require_dir "${rootsys}/lib"
+  require_file "${rootsys}/bin/root-config"
+
+  read -e -r -p "Enter the path to yaml-cpp> " yamlcpp
+  require_dir "${yamlcpp}"
+  yamlcpp="$(resolve_path "${yamlcpp}")"
+
+  if [[ -d "${yamlcpp}/lib" ]]; then
+    yamllib="$(resolve_path "${yamlcpp}/lib")"
+  elif [[ -d "${yamlcpp}/lib64" ]]; then
+    yamllib="$(resolve_path "${yamlcpp}/lib64")"
+  else
+    die "Could not find yaml-cpp library in ${yamlcpp}"
+  fi
+
+  if [[ -d "${yamllib}/cmake/yaml-cpp" ]]; then
+    yamlcmake="$(resolve_path "${yamllib}/cmake")"
+  elif [[ -d "${yamlcpp}/share/cmake/yaml-cpp" ]]; then
+    yamlcmake="$(resolve_path "${yamlcpp}/share/cmake")"
+  else
+    die "Could not find yaml-cpp CMake config in ${yamlcpp}"
+  fi
+
+  read -e -r -p "Enter the path to the source of artemis> " artsrc
+  require_dir "${artsrc}"
+  artsrc="$(resolve_path "${artsrc}")"
+
+  read -e -r -p "Enter the path to build directory> " artbld
+  [[ -n "${artbld}" ]] || die "build directory is empty"
+  artbld="$(resolve_path "${artbld}")"
+
+  read -e -r -p "Enter the install prefix> " artsys
+  [[ -n "${artsys}" ]] || die "install prefix is empty"
+  if [[ -e "${artsys}" ]]; then
+    artsys="$(resolve_path "${artsys}")"
+  else
+    mkdir -p -- "${artsys}"
+    artsys="$(resolve_path "${artsys}")"
+  fi
+
+  printf '%s\n' "Configuration:"
+  print_var "ROOTSYS"        "${rootsys}"
+  print_var "YAML_CPP_LIB"   "${yamllib}"
+  print_var "YAML_CPP_CMAKE" "${yamlcmake}"
+  print_var "ARTEMIS_SOURCE" "${artsrc}"
+  print_var "BUILD_DIR"      "${artbld}"
+  print_var "INSTALL_PREFIX" "${artsys}"
+
+  if ! confirm_yes "OK? (y/N)> "; then
+    exit 0
+  fi
+
+  if [[ -d "${artbld}" ]]; then
+    if [[ -n "$(find "${artbld}" -mindepth 1 -maxdepth 1 -print -quit 2>/dev/null)" ]]; then
+      if confirm_yes "Build directory is not empty. Is it OK to erase the directory? (y/N)> "; then
+        [[ -n "${artbld}" ]] || die "build directory is empty"
+        [[ "${artbld}" != "/" ]] || die "refusing to erase /"
+        find "${artbld}" -mindepth 1 -maxdepth 1 -exec rm -rf -- {} +
+      else
+        exit 1
+      fi
+    fi
+  else
+    mkdir -p -- "${artbld}"
+  fi
+
+  if [[ -n "${ROOTSYS:-}" ]]; then
+    path="$(remove_path "${path}" "${ROOTSYS}/bin")"
+    libpath="$(remove_path "${libpath}" "${ROOTSYS}/lib")"
+    shlib="$(remove_path "${shlib}" "${ROOTSYS}/lib")"
+    ldlib="$(remove_path "${ldlib}" "${ROOTSYS}/lib")"
+    dyldlib="$(remove_path "${dyldlib}" "${ROOTSYS}/lib")"
+    cmake_prefix_path="$(remove_path "${cmake_prefix_path}" "${ROOTSYS}")"
+  fi
+
+  if [[ -n "${TARTSYS:-}" ]]; then
+    path="$(remove_path "${path}" "${TARTSYS}/bin")"
+    ldlib="$(remove_path "${ldlib}" "${TARTSYS}/lib")"
+    cmake_prefix_path="$(remove_path "${cmake_prefix_path}" "${TARTSYS}")"
+  fi
+
+  if [[ -n "${YAML_CPP_LIB:-}" ]]; then
+    ldlib="$(remove_path "${ldlib}" "${YAML_CPP_LIB}")"
+  fi
+
+  if [[ -n "${YAML_CPP_CMAKE:-}" ]]; then
+    cmake_prefix_path="$(remove_path "${cmake_prefix_path}" "${YAML_CPP_CMAKE}")"
+  fi
+
+  path="$(prepend_path "${path}" "${rootsys}/bin")"
+  ldlib="$(prepend_path "${ldlib}" "${yamllib}")"
+  ldlib="$(prepend_path "${ldlib}" "${rootsys}/lib")"
+  cmake_prefix_path="$(prepend_path "${cmake_prefix_path}" "${rootsys}")"
+  cmake_prefix_path="$(prepend_path "${cmake_prefix_path}" "${yamlcmake}")"
+
+  export PATH="${path}"
+  export LIBPATH="${libpath}"
+  export SHLIB_PATH="${shlib}"
+  export LD_LIBRARY_PATH="${ldlib}"
+  export DYLD_LIBRARY_PATH="${dyldlib}"
+  export CMAKE_PREFIX_PATH="${cmake_prefix_path}"
+
+  cd "${artbld}" || exit 1
+  cmake "${artsrc}" -DCMAKE_INSTALL_PREFIX="${artsys}"
+  make -j"$(getconf _NPROCESSORS_ONLN)"
+  make install
+  cd "${currentdir}" || exit 1
+
+  if confirm_yes "Will you register this version to artenv? (y/N)> "; then
+    read -r -p "Enter the version name> " version
+    [[ -n "${version}" ]] || die "version name is empty"
+    [[ "${version}" != */* ]] || die "version name must not contain /"
+    [[ "${version}" != "." && "${version}" != ".." ]] || die "invalid version name"
+
+    version_conf="${ARTENV_ROOT}/versions/${version}.toml"
+    [[ ! -e "${version_conf}" ]] || die "${version} already exists"
+
+    ensure_dir "${ARTENV_ROOT}/versions"
+    {
+      printf '[version]\n'
+      printf 'type = "native"\n'
+      printf 'artsys = "%s"\n'    "${artsys}"
+      printf 'rootsys = "%s"\n'   "${rootsys}"
+      printf 'yamllib = "%s"\n'   "${yamllib}"
+      printf 'yamlcmake = "%s"\n' "${yamlcmake}"
+    } > "${version_conf}"
+
+    printf '%s was registered\n' "${version}"
+  fi
+}
+
+main() {
+  local mode="" tag=""
+
+  while [[ $# -gt 0 ]]; do
+    case "$1" in
+      --native)    mode="native"    ; shift ;;
+      --apptainer) mode="apptainer" ; shift ;;
+      --update)
+        shift
+        [[ $# -gt 0 ]] || die "--update requires a version name"
+        main_update "$1"
+        return $?
+        ;;
+      --list|-l)   list_versions    ; return $? ;;
+      --help|-h)   print_help       ; return 0  ;;
+      --*) die "unknown option: $1" ;;
+      *)   tag="$1"                 ; shift ;;
+    esac
+  done
+
+  if [[ -z "${mode}" ]]; then
+    mode="apptainer"
+  fi
+
+  case "${mode}" in
+    apptainer) main_apptainer "${tag}" ;;
+    native)    main_native             ;;
+  esac
+}
+
+main "$@"

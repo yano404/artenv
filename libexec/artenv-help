@@ -17,6 +17,7 @@ Commands:
   register-version  Register an artemis version
   register-env      Register analysis environment
   new               Create the new working directory from templates
-  make              Build and install artemis to your environment
+  install           Install artemis (--native: build from source, --apptainer: pull image)
   doctor            Diagnose a registered environment
+  migrate           Migrate v1 (symlink) data to v2 (TOML)
 EOS

@@ -1,0 +1,168 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+script_dir="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
+# shellcheck source=/dev/null
+source "${script_dir}/util.sh"
+
+read_git_repos_v1() {
+  local path="$1"
+
+  if [[ -f "${path}" && ! -L "${path}" ]]; then
+    tr -d '\n' < "${path}"
+    return 0
+  fi
+
+  if [[ -L "${path}" ]]; then
+    readlink -- "${path}"
+    return 0
+  fi
+
+  return 1
+}
+
+migrate_versions() {
+  local versions_dir="${ARTENV_ROOT}/versions"
+  local migrated=0
+
+  shopt -s nullglob
+  local -a version_dirs=("${versions_dir}"/*)
+  shopt -u nullglob
+
+  local entry version_name version_type conf
+  for entry in "${version_dirs[@]}"; do
+    [[ -d "${entry}" ]] || continue
+    version_name="$(basename "${entry}")"
+    conf="${versions_dir}/${version_name}.toml"
+
+    if [[ -f "${conf}" ]]; then
+      printf '  skip (already migrated): %s\n' "${version_name}"
+      continue
+    fi
+
+    version_type="native"
+    if [[ -f "${entry}/type" ]]; then
+      version_type="$(< "${entry}/type")"
+    fi
+
+    if [[ "${version_type}" == "apptainer" ]]; then
+      local image
+      image="$(resolve_path "${entry}/image")"
+      {
+        printf '[version]\n'
+        printf 'type = "apptainer"\n'
+        printf 'image = "%s"\n' "${image}"
+      } > "${conf}"
+    else
+      local artsys rootsys yamllib yamlcmake
+      artsys="$(resolve_path "${entry}/artsys")"
+      rootsys="$(resolve_path "${entry}/rootsys")"
+      yamllib="$(resolve_path "${entry}/yamllib")"
+      yamlcmake="$(resolve_path "${entry}/yamlcmake")"
+      {
+        printf '[version]\n'
+        printf 'type = "native"\n'
+        printf 'artsys = "%s"\n'    "${artsys}"
+        printf 'rootsys = "%s"\n'   "${rootsys}"
+        printf 'yamllib = "%s"\n'   "${yamllib}"
+        printf 'yamlcmake = "%s"\n' "${yamlcmake}"
+      } > "${conf}"
+    fi
+
+    rm -rf -- "${entry}"
+    printf '  migrated version: %s\n' "${version_name}"
+    migrated=$((migrated + 1))
+  done
+
+  return "${migrated}"
+}
+
+migrate_envs() {
+  local envs_dir="${ARTENV_ROOT}/envs"
+  local migrated=0
+
+  shopt -s nullglob
+  local -a env_dirs=("${envs_dir}"/*)
+  shopt -u nullglob
+
+  local entry env_name conf
+  for entry in "${env_dirs[@]}"; do
+    [[ -d "${entry}" ]] || continue
+    env_name="$(basename "${entry}")"
+    conf="${envs_dir}/${env_name}.toml"
+
+    if [[ -f "${conf}" ]]; then
+      printf '  skip (already migrated): %s\n' "${env_name}"
+      continue
+    fi
+
+    local version_dir version_name
+    version_dir="$(resolve_path "${entry}/version")"
+    version_name="$(basename "${version_dir}")"
+
+    local work_dir
+    work_dir="$(resolve_path "${entry}/work")"
+
+    local git_repos=""
+    if [[ -e "${entry}/git_repos" ]]; then
+      git_repos="$(read_git_repos_v1 "${entry}/git_repos" || true)"
+    fi
+
+    local use_artlogin="false"
+    if [[ -f "${entry}/artlogin.sh" ]]; then
+      use_artlogin="true"
+      cp -- "${entry}/artlogin.sh" "${envs_dir}/${env_name}.artlogin.sh"
+    fi
+
+    {
+      printf '[env]\n'
+      printf 'version = "%s"\n' "${version_name}"
+      printf 'work = "%s"\n'    "${work_dir}"
+      if [[ -n "${git_repos}" ]]; then
+        printf 'git_repos = "%s"\n' "${git_repos}"
+      fi
+      printf 'use_artlogin = %s\n' "${use_artlogin}"
+    } > "${conf}"
+
+    rm -rf -- "${entry}"
+    printf '  migrated env: %s\n' "${env_name}"
+    migrated=$((migrated + 1))
+  done
+
+  return "${migrated}"
+}
+
+migrate_default() {
+  local target="${ARTENV_ROOT}/env"
+
+  if [[ -L "${target}" ]]; then
+    local env_dir env_name
+    env_dir="$(readlink -- "${target}")"
+    env_name="$(basename "${env_dir}")"
+    rm -- "${target}"
+    printf '%s\n' "${env_name}" > "${target}"
+    printf '  migrated default env: %s\n' "${env_name}"
+  elif [[ -f "${target}" ]]; then
+    printf '  skip (already migrated): default env\n'
+  fi
+}
+
+main() {
+  [[ -n "${ARTENV_ROOT:-}" ]] || die "ARTENV_ROOT is not set"
+  [[ $# -eq 0 ]] || die "usage: artenv migrate"
+
+  printf 'Migrating artenv v1 -> v2 ...\n'
+
+  printf '\n[versions]\n'
+  migrate_versions || true
+
+  printf '\n[envs]\n'
+  migrate_envs || true
+
+  printf '\n[default]\n'
+  migrate_default
+
+  printf '\nDone.\n'
+}
+
+main "$@"

@@ -5,28 +5,6 @@ script_dir="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 # shellcheck source=/dev/null
 source "${script_dir}/util.sh"
 
-validate_version_dir() {
-  local version_dir="$1"
-
-  require_dir "${version_dir}"
-  require_exists "${version_dir}/artsys"
-  require_exists "${version_dir}/rootsys"
-  require_exists "${version_dir}/yamllib"
-  require_exists "${version_dir}/yamlcmake"
-}
-
-validate_env_dir() {
-  local env_dir="$1"
-
-  require_dir "${env_dir}"
-  require_exists "${env_dir}/version"
-  require_exists "${env_dir}/work"
-
-  local version_dir
-  version_dir="$(resolve_path "${env_dir}/version")"
-  validate_version_dir "${version_dir}"
-}
-
 status_of_path() {
   local path="$1"
   if [[ -e "${path}" ]]; then
@@ -40,7 +18,9 @@ main() {
   [[ $# -le 1 ]] || die "usage: artenv info [env]"
 
   local env=""
+  local version_type="native"
   local art_version=""
+  local apptainer_image=""
   local artsys=""
   local rootsys=""
   local yamllib=""
@@ -48,38 +28,47 @@ main() {
   local analysis_dir=""
   local work_dir=""
   local git_repos=""
+  local binds=""
   local use_artlogin="NO"
 
   if [[ $# -eq 0 ]]; then
-    [[ -n "${ART_PROJECT:-}" ]] || die "ART_PROJECT is not set"
-    [[ -n "${ART_VERSION:-}" ]] || die "ART_VERSION is not set"
-    [[ -n "${TARTSYS:-}" ]] || die "TARTSYS is not set"
-    [[ -n "${ROOTSYS:-}" ]] || die "ROOTSYS is not set"
-    [[ -n "${YAML_CPP_LIB:-}" ]] || die "YAML_CPP_LIB is not set"
-    [[ -n "${YAML_CPP_CMAKE:-}" ]] || die "YAML_CPP_CMAKE is not set"
+    [[ -n "${ART_PROJECT:-}" ]]      || die "ART_PROJECT is not set"
+    [[ -n "${ART_VERSION:-}" ]]      || die "ART_VERSION is not set"
     [[ -n "${ART_ANALYSIS_DIR:-}" ]] || die "ART_ANALYSIS_DIR is not set"
-    [[ -n "${ART_WORK_DIR:-}" ]] || die "ART_WORK_DIR is not set"
-    [[ -n "${USE_ARTLOGIN:-}" ]] || die "USE_ARTLOGIN is not set"
+    [[ -n "${ART_WORK_DIR:-}" ]]     || die "ART_WORK_DIR is not set"
+    [[ -n "${USE_ARTLOGIN:-}" ]]     || die "USE_ARTLOGIN is not set"
 
     env="${ART_PROJECT}"
     art_version="${ART_VERSION}"
-    artsys="${TARTSYS}"
-    rootsys="${ROOTSYS}"
-    yamllib="${YAML_CPP_LIB}"
-    yamlcmake="${YAML_CPP_CMAKE}"
     analysis_dir="${ART_ANALYSIS_DIR}"
     work_dir="${ART_WORK_DIR}"
     git_repos="${ART_REPOS:-}"
     use_artlogin="${USE_ARTLOGIN}"
+
+    if [[ -n "${ART_APPTAINER_IMAGE:-}" ]]; then
+      version_type="apptainer"
+      apptainer_image="${ART_APPTAINER_IMAGE}"
+      binds="${ART_BINDS:-}"
+    else
+      version_type="native"
+      [[ -n "${TARTSYS:-}" ]]        || die "TARTSYS is not set"
+      [[ -n "${ROOTSYS:-}" ]]        || die "ROOTSYS is not set"
+      [[ -n "${YAML_CPP_LIB:-}" ]]   || die "YAML_CPP_LIB is not set"
+      [[ -n "${YAML_CPP_CMAKE:-}" ]] || die "YAML_CPP_CMAKE is not set"
+      artsys="${TARTSYS}"
+      rootsys="${ROOTSYS}"
+      yamllib="${YAML_CPP_LIB}"
+      yamlcmake="${YAML_CPP_CMAKE}"
+    fi
   else
     [[ -n "${ARTENV_ROOT:-}" ]] || die "ARTENV_ROOT is not set"
-  
+
     env="$1"
-    local env_dir="${ARTENV_ROOT}/envs/${env}"
-  
-    load_env_metadata "${env_dir}"
-  
+    load_env_metadata "${env}"
+
+    version_type="${ENV_VERSION_TYPE}"
     art_version="${ENV_VERSION_NAME}"
+    apptainer_image="${ENV_APPTAINER_IMAGE}"
     artsys="${ENV_ARTSYS}"
     rootsys="${ENV_ROOTSYS}"
     yamllib="${ENV_YAMLLIB}"
@@ -87,15 +76,22 @@ main() {
     analysis_dir="${ENV_WORK_DIR}"
     work_dir="${ENV_WORK_DIR}"
     git_repos="${ENV_GIT_REPOS}"
+    binds="${ENV_BINDS}"
     use_artlogin="${ENV_USE_ARTLOGIN}"
   fi
 
-  printf '%s\n' "- env: ${env##*/}"
+  printf '%s\n' "- env: ${env}"
   printf '%s\n' "- artemis version: ${art_version}"
-  printf '%s\n' "  - artemis: ${artsys} $(status_of_path "${artsys}")"
-  printf '%s\n' "  - root: ${rootsys} $(status_of_path "${rootsys}")"
-  printf '%s\n' "  - yaml-cpp lib: ${yamllib} $(status_of_path "${yamllib}")"
-  printf '%s\n' "  - yaml-cpp cmake: ${yamlcmake} $(status_of_path "${yamlcmake}")"
+  if [[ "${version_type}" == "apptainer" ]]; then
+    printf '%s\n' "  - type: apptainer"
+    printf '%s\n' "  - image: ${apptainer_image} $(status_of_path "${apptainer_image}")"
+    printf '%s\n' "  - binds: ${binds:-<none>}"
+  else
+    printf '%s\n' "  - artemis: ${artsys} $(status_of_path "${artsys}")"
+    printf '%s\n' "  - root: ${rootsys} $(status_of_path "${rootsys}")"
+    printf '%s\n' "  - yaml-cpp lib: ${yamllib} $(status_of_path "${yamllib}")"
+    printf '%s\n' "  - yaml-cpp cmake: ${yamlcmake} $(status_of_path "${yamlcmake}")"
+  fi
   printf '%s\n' "- analysis directory: ${analysis_dir} $(status_of_path "${analysis_dir}")"
   printf '%s\n' "- working directory: ${work_dir} $(status_of_path "${work_dir}")"
   printf '%s\n' "- git repository: ${git_repos}"
@@ -103,4 +99,3 @@ main() {
 }
 
 main "$@"
-

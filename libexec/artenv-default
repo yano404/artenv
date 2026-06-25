@@ -12,20 +12,18 @@ main() {
   local target="${ARTENV_ROOT}/env"
 
   if [[ $# -eq 0 ]]; then
-    [[ -L "${target}" ]] || die "default environment is not set"
-    local env_link
-    env_link="$(readlink -- "${target}")"
-    printf '%s\n' "${env_link##*/}"
+    [[ -f "${target}" ]] || die "default environment is not set"
+    cat -- "${target}"
     exit 0
   fi
 
   local env="$1"
-  local env_dir="${ARTENV_ROOT}/envs/${env}"
+  local env_conf="${ARTENV_ROOT}/envs/${env}.toml"
 
   [[ -n "${env}" ]] || die "environment name is empty"
-  [[ -d "${env_dir}" ]] || die "environment not found: ${env}"
+  [[ -f "${env_conf}" ]] || die "environment not found: ${env}"
 
-  ln -sfn -- "${env_dir}" "${target}"
+  printf '%s\n' "${env}" > "${target}"
 }
 
 main "$@"

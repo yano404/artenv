@@ -3,6 +3,12 @@ artenv
 
 artenv is the version and environment manager tool for [Artemis](https://github.com/artemis-dev/artemis).
 artenv enables you to switch multiple artemis versions and analysis environment easily.
+Both native installations and [Apptainer](https://apptainer.org/) container images are supported as artemis versions.
+
+## Requirements
+
+- bash
+- yq v4 with TOML support (`dnf install yq` on RHEL/Fedora; or download from [github.com/mikefarah/yq](https://github.com/mikefarah/yq/releases))
 
 ## Installation
 
@@ -30,9 +36,25 @@ Register artemis:
 
 ```sh
 artenv register-version <version-name>
+Select version type
+1) native
+2) apptainer
+#? 1
 Enter the path to artemis> /path/to/artemis
 Enter the path to root> /path/to/root
 Enter the path to yaml-cpp> /path/to/yaml-cpp
+<version-name> was registered
+```
+
+To register an Apptainer image as a version:
+
+```sh
+artenv register-version <version-name>
+Select version type
+1) native
+2) apptainer
+#? 2
+Enter the path to Apptainer image (.sif)> /path/to/artemis.sif
 <version-name> was registered
 ```
 
@@ -73,6 +95,46 @@ autoload -Uz compinit
 compinit
 ```
 
+## Configuration Files
+
+artenv stores version and environment settings as TOML files under `$ARTENV_ROOT`.
+
+### Version config (`versions/<name>.toml`)
+
+**Native:**
+
+```toml
+[version]
+type = "native"
+artsys    = "/path/to/artemis"
+rootsys   = "/path/to/root"
+yamllib   = "/path/to/yaml-cpp/lib"
+yamlcmake = "/path/to/yaml-cpp/cmake"
+```
+
+**Apptainer:**
+
+```toml
+[version]
+type   = "apptainer"
+uri    = "oras://ghcr.io/yano404/artemis_apptainer:latest"  # pull URI (set by artenv install)
+image  = "/path/to/artemis.sif"
+digest = "sha256:..."                                         # manifest digest (set by artenv install, used by --update)
+```
+
+### Environment config (`envs/<name>.toml`)
+
+```toml
+[env]
+version      = "version-name"          # registered version name (required)
+work         = "/path/to/work"         # working directory (required)
+git_repos    = "/path/to/git_repos"   # git repository path or URL (optional)
+use_artlogin = false                   # enable artlogin (optional, default: false)
+binds        = ["/extra/path"]         # additional Apptainer bind paths (optional)
+```
+
+`binds` is only used when the referenced version is of type `apptainer`.
+
 ## Commands
 
 - `ls`                         : Print the environment list
@@ -86,8 +148,10 @@ compinit
 - `register-version <version>` : Register a artemis version
 - `register-env <env>`         : Register analysis environment
 - `new <dir>`                  : Create the working directory using the templates
-- `make`                       : Build and install artemis to your environment
+- `install [--native|--apptainer] [TAG]` : Install artemis (build from source or pull Apptainer image)
+- `install --update <version>`     : Re-pull the Apptainer image for an existing version
 - `doctor [env|--all]`         : Diagnose a registered environment
+- `migrate`                    : Migrate v1 (symlink) data to v2 (TOML)
 
 ### Examples
 
@@ -117,16 +181,31 @@ $ artenv version
 artemis-e559
 ```
 
-- `artenv info`
+- `artenv info` (native environment)
 
 ```
 - env: e559
 - artemis version: artemis-e559
-  - artemis: /home/quser/local/artemis/artemis-e559
-  - root: /home/quser/local/root/v6.26.10
-  - yaml-cpp: /home/quser/local/yaml-cpp/yaml-cpp-0.6.3/lib
-- analysis directory: /home/yano/work/e559/art
-- working directory: /home/yano/work/e559/art
+  - artemis: /home/quser/local/artemis/artemis-e559 [OK]
+  - root: /home/quser/local/root/v6.26.10 [OK]
+  - yaml-cpp lib: /home/quser/local/yaml-cpp/yaml-cpp-0.6.3/lib [OK]
+  - yaml-cpp cmake: /home/quser/local/yaml-cpp/yaml-cpp-0.6.3/lib/cmake [OK]
+- analysis directory: /home/yano/work/e559/art [OK]
+- working directory: /home/yano/work/e559/art [OK]
+- git repository:
+- use artlogin: NO
+```
+
+- `artenv info` (Apptainer environment)
+
+```
+- env: e559-apptainer
+- artemis version: artemis-apptainer
+  - type: apptainer
+  - image: /path/to/artemis.sif [OK]
+  - binds: <none>
+- analysis directory: /home/yano/work/e559/art [OK]
+- working directory: /home/yano/work/e559/art [OK]
 - git repository:
 - use artlogin: NO
 ```
@@ -142,23 +221,52 @@ $ echo $PATH
 /home/yano/local/artemis/develop/bin:/home/yano/local/root/v6.32.04/bin:/home/yano/local/artenv/libexec
 ```
 
-- `artenv make`
+- `artenv install`
+
+Native (build from source):
 
 ```
-$ artenv make
+$ artenv install --native
 Enter the path to root> /home/yano/local/root/v6.32.04
 Enter the path to yaml-cpp> /home/yano/local/yaml-cpp/v0.8.0
 Enter the path to the source of artemis> /home/yano/src/artemis/develop
 Enter the path to build directory> /home/yano/build/artemis/artdev
 Enter the install prefix> /home/yano/local/artemis/artdev
-Artemis will be built and installed to your environment with the following settings.
-- root: /home/yano/local/root/v6.32.04
-- yaml-cpp: /home/yano/local/yaml-cpp/v0.8.0
-- artemis:
-  - source directory: /home/yano/src/artemis/develop
-  - build directory: /home/yano/build/artemis/artdev
-  - install prefix: /home/yano/local/artemis/artdev
-OK? (y/N)>y
+Configuration:
+  ROOTSYS                /home/yano/local/root/v6.32.04
+  YAML_CPP_LIB           /home/yano/local/yaml-cpp/v0.8.0/lib
+  YAML_CPP_CMAKE         /home/yano/local/yaml-cpp/v0.8.0/lib/cmake
+  ARTEMIS_SOURCE         /home/yano/src/artemis/develop
+  BUILD_DIR              /home/yano/build/artemis/artdev
+  INSTALL_PREFIX         /home/yano/local/artemis/artdev
+OK? (y/N)> y
+```
+
+Apptainer (pull image):
+
+```
+$ artenv install --apptainer
+Enter the pull URI [oras://ghcr.io/yano404/artemis_apptainer:latest]>
+Enter the version name> artemis-latest
+Enter the path to save SIF [/home/yano/.artenv/images/artemis-latest.sif]>
+Configuration:
+  URI                    oras://ghcr.io/yano404/artemis_apptainer:latest
+  VERSION                artemis-latest
+  SIF                    /home/yano/.artenv/images/artemis-latest.sif
+OK? (y/N)> y
+```
+
+Update (re-pull when upstream image changes):
+
+```
+$ artenv install --update artemis-latest
+Checking registry...
+Update:
+  VERSION                artemis-latest
+  URI                    oras://ghcr.io/yano404/artemis_apptainer:latest
+  SIF                    /home/yano/.artenv/images/artemis-latest.sif
+  DIGEST                 sha256:121ea823...
+OK? (y/N)> y
 ```
 
 - `artenv doctor`
@@ -167,6 +275,41 @@ OK? (y/N)>y
 artenv doctor (checks the current environment)
 artenv doctor <env> (checks the specified environment)
 artenv doctor --all (checks all registered environments)
+```
+
+- `artenv migrate`
+
+Migrate v1 (symlink-based) data to v2 (TOML-based):
+
+```
+artenv migrate
+```
+
+## Apptainer Support
+
+When an Apptainer environment is active, the following commands are automatically wrapped to run inside the container:
+
+- `artemis`
+- `cmake`
+- `make`
+- `root`
+- `artexec` — runs an arbitrary command inside the container
+
+```sh
+# Run any command inside the Apptainer container
+artexec ./make.sh
+artexec bash
+artexec which root
+```
+
+The working directory (`ART_WORK_DIR`) is automatically bind-mounted into the container.
+Additional bind paths can be specified in the environment config (`envs/<env-name>.toml`):
+
+```toml
+[env]
+version = "artemis-apptainer"
+work = "/path/to/work"
+binds = ["/extra/path1", "/extra/path2"]
 ```
 
 ## License

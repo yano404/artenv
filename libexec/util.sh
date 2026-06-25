@@ -41,20 +41,16 @@ resolve_path() {
   die "realpath or readlink -f is required"
 }
 
-read_git_repos() {
-  local path="$1"
+require_yq() {
+  command -v yq >/dev/null 2>&1 || die "yq is required (dnf install yq)"
+}
 
-  if [[ -f "${path}" && ! -L "${path}" ]]; then
-    tr -d '\n' < "${path}"
-    return 0
-  fi
-
-  if [[ -L "${path}" ]]; then
-    readlink -- "${path}"
-    return 0
-  fi
-
-  return 1
+toml_get() {
+  local file="$1"
+  local section="$2"
+  local key="$3"
+  local default="${4:-}"
+  yq -p toml -oy -r ".${section}.${key} // \"${default}\"" "${file}"
 }
 
 remove_path() {
@@ -120,69 +116,102 @@ append_path() {
   fi
 }
 
-validate_version_dir() {
-  local version_dir="$1"
+validate_version_conf() {
+  local conf="$1"
+  require_yq
+  require_file "${conf}"
 
-  require_dir "${version_dir}"
-  require_exists "${version_dir}/artsys"
-  require_exists "${version_dir}/rootsys"
-  require_exists "${version_dir}/yamllib"
-  require_exists "${version_dir}/yamlcmake"
+  local version_type
+  version_type="$(yq -p toml -oy -r '.version.type // "native"' "${conf}")"
 
-  require_dir "$(resolve_path "${version_dir}/artsys")"
-  require_dir "$(resolve_path "${version_dir}/rootsys")"
-  require_dir "$(resolve_path "${version_dir}/yamllib")"
-  require_dir "$(resolve_path "${version_dir}/yamlcmake")"
-  require_file "$(resolve_path "${version_dir}/rootsys")/bin/root-config"
+  if [[ "${version_type}" == "apptainer" ]]; then
+    local image
+    image="$(yq -p toml -oy -r '.version.image' "${conf}")"
+    [[ -n "${image}" ]] || die "version.image not found in ${conf}"
+    [[ -f "${image}" ]] || die "image not found: ${image}"
+  else
+    local artsys rootsys yamllib yamlcmake
+    artsys="$(yq -p toml -oy -r '.version.artsys' "${conf}")"
+    rootsys="$(yq -p toml -oy -r '.version.rootsys' "${conf}")"
+    yamllib="$(yq -p toml -oy -r '.version.yamllib' "${conf}")"
+    yamlcmake="$(yq -p toml -oy -r '.version.yamlcmake' "${conf}")"
+
+    [[ -n "${artsys}" ]]    || die "version.artsys not found in ${conf}"
+    [[ -n "${rootsys}" ]]   || die "version.rootsys not found in ${conf}"
+    [[ -n "${yamllib}" ]]   || die "version.yamllib not found in ${conf}"
+    [[ -n "${yamlcmake}" ]] || die "version.yamlcmake not found in ${conf}"
+
+    [[ -d "${artsys}" ]]    || die "directory not found: ${artsys}"
+    [[ -d "${rootsys}" ]]   || die "directory not found: ${rootsys}"
+    [[ -d "${yamllib}" ]]   || die "directory not found: ${yamllib}"
+    [[ -d "${yamlcmake}" ]] || die "directory not found: ${yamlcmake}"
+    [[ -f "${rootsys}/bin/root-config" ]] || die "root-config not found: ${rootsys}/bin/root-config"
+  fi
 }
 
-validate_env_dir() {
-  local env_dir="$1"
-  local version_dir
-  local work_dir
+validate_env_conf() {
+  local conf="$1"
+  require_yq
+  require_file "${conf}"
 
-  require_dir "${env_dir}"
-  require_exists "${env_dir}/version"
-  require_exists "${env_dir}/work"
+  local version_name work_dir
+  version_name="$(yq -p toml -oy -r '.env.version' "${conf}")"
+  work_dir="$(yq -p toml -oy -r '.env.work' "${conf}")"
 
-  version_dir="$(resolve_path "${env_dir}/version")"
-  work_dir="$(resolve_path "${env_dir}/work")"
+  [[ -n "${version_name}" ]] || die "env.version not found in ${conf}"
+  [[ -n "${work_dir}" ]]     || die "env.work not found in ${conf}"
+  [[ -d "${work_dir}" ]]     || die "work directory not found: ${work_dir}"
 
-  validate_version_dir "${version_dir}"
-  require_dir "${work_dir}"
-
-  if [[ -e "${env_dir}/artlogin.sh" ]]; then
-    require_file "${env_dir}/artlogin.sh"
-  fi
+  local version_conf="${ARTENV_ROOT}/versions/${version_name}.toml"
+  validate_version_conf "${version_conf}"
 }
 
 # shellcheck disable=SC2034
 load_env_metadata() {
-  local env_dir="$1"
+  local env_name="$1"
+  local env_conf="${ARTENV_ROOT}/envs/${env_name}.toml"
 
-  validate_env_dir "${env_dir}"
+  require_yq
+  require_file "${env_conf}"
 
-  local version_dir
-  version_dir="$(resolve_path "${env_dir}/version")"
+  ENV_VERSION_NAME="$(yq -p toml -oy -r '.env.version'           "${env_conf}")"
+  ENV_WORK_DIR="$(yq -p toml -oy -r '.env.work'                  "${env_conf}")"
+  ENV_GIT_REPOS="$(yq -p toml -oy -r '.env.git_repos // ""'      "${env_conf}")"
+  ENV_BINDS="$(yq -p toml -oy -r '.env.binds // [] | join(",")' "${env_conf}")"
 
-  ENV_VERSION_DIR="${version_dir}"
-  ENV_VERSION_NAME="$(basename "${version_dir}")"
-  ENV_ARTSYS="$(resolve_path "${version_dir}/artsys")"
-  ENV_ROOTSYS="$(resolve_path "${version_dir}/rootsys")"
-  ENV_YAMLLIB="$(resolve_path "${version_dir}/yamllib")"
-  ENV_YAMLCMAKE="$(resolve_path "${version_dir}/yamlcmake")"
-  ENV_WORK_DIR="$(resolve_path "${env_dir}/work")"
+  [[ -n "${ENV_VERSION_NAME}" ]] || die "env.version not found in ${env_conf}"
+  [[ -n "${ENV_WORK_DIR}" ]]     || die "env.work not found in ${env_conf}"
 
-  ENV_GIT_REPOS=""
-  if ENV_GIT_REPOS="$(read_git_repos "${env_dir}/git_repos" 2>/dev/null)"; then
-    :
-  else
-    ENV_GIT_REPOS=""
-  fi
-
-  if [[ -f "${env_dir}/artlogin.sh" ]]; then
+  local use_artlogin_raw
+  use_artlogin_raw="$(yq -p toml -oy -r '.env.use_artlogin // "false"' "${env_conf}")"
+  if [[ "${use_artlogin_raw}" == "true" ]]; then
     ENV_USE_ARTLOGIN="YES"
   else
     ENV_USE_ARTLOGIN="NO"
+  fi
+
+  local version_conf="${ARTENV_ROOT}/versions/${ENV_VERSION_NAME}.toml"
+  require_file "${version_conf}"
+
+  ENV_VERSION_TYPE="$(yq -p toml -oy -r '.version.type // "native"' "${version_conf}")"
+
+  if [[ "${ENV_VERSION_TYPE}" == "apptainer" ]]; then
+    ENV_APPTAINER_IMAGE="$(yq -p toml -oy -r '.version.image' "${version_conf}")"
+    ENV_ARTSYS=""
+    ENV_ROOTSYS=""
+    ENV_YAMLLIB=""
+    ENV_YAMLCMAKE=""
+  else
+    ENV_APPTAINER_IMAGE=""
+    ENV_ARTSYS="$(yq -p toml -oy -r '.version.artsys'    "${version_conf}")"
+    ENV_ROOTSYS="$(yq -p toml -oy -r '.version.rootsys'  "${version_conf}")"
+    ENV_YAMLLIB="$(yq -p toml -oy -r '.version.yamllib'  "${version_conf}")"
+    ENV_YAMLCMAKE="$(yq -p toml -oy -r '.version.yamlcmake' "${version_conf}")"
+  fi
+
+  if [[ "${ENV_USE_ARTLOGIN}" == "YES" ]]; then
+    ENV_ARTLOGIN_SH="${ARTENV_ROOT}/envs/${env_name}.artlogin.sh"
+  else
+    ENV_ARTLOGIN_SH=""
   fi
 }

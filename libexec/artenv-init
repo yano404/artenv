@@ -13,15 +13,17 @@ function main() {
     [[ -d "${ARTENV_ROOT}/versions" ]] || mkdir -p -- "${ARTENV_ROOT}/versions"
     [[ -d "${ARTENV_ROOT}/envs"     ]] || mkdir -p -- "${ARTENV_ROOT}/envs"
 
-    if [[ -L "${ARTENV_ROOT}/env" || -e "${ARTENV_ROOT}/env" ]]; then
-        env=$(readlink "${ARTENV_ROOT}/env")
-        env=$(basename "${env}")
-        source artenv-sh-shell "${env}"
+    if [[ -f "${ARTENV_ROOT}/env" ]]; then
+        local env
+        env="$(< "${ARTENV_ROOT}/env")"
+        if [[ -n "${env}" ]]; then
+            source artenv-sh-shell "${env}"
+        fi
     fi
 
     cat << 'EOS'
 artenv() {
-    local commmand
+    local command
     command="${1:-}"
     if [ "$#" -gt 0 ]
     then

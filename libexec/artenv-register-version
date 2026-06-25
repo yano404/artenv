@@ -6,21 +6,9 @@ script_dir="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 # shellcheck source=/dev/null
 source "${script_dir}/util.sh"
 
-main() {
-  [[ -n "${ARTENV_ROOT:-}" ]] || die "ARTENV_ROOT is not set"
-  [[ $# -eq 1 ]] || die "usage: artenv register-version <version>"
-
-  local version="$1"
-  local version_dir="${ARTENV_ROOT}/versions/${version}"
-  local tmp_dir
-
-  local artsys=""
-  local rootsys=""
-  local yamlcpp=""
-  local yamllib=""
-  local yamlcmake=""
-
-  [[ ! -e "${version_dir}" ]] || die "${version} already exists"
+write_native_conf() {
+  local conf="$1"
+  local artsys="" rootsys="" yamlcpp="" yamllib="" yamlcmake=""
 
   read -e -r -p "Enter the path to artemis> " artsys
   require_dir "${artsys}"
@@ -55,16 +43,67 @@ main() {
     die "Could not find yaml-cpp CMake config in ${yamlcpp}"
   fi
 
+  {
+    printf '[version]\n'
+    printf 'type = "native"\n'
+    printf 'artsys = "%s"\n'    "${artsys}"
+    printf 'rootsys = "%s"\n'   "${rootsys}"
+    printf 'yamllib = "%s"\n'   "${yamllib}"
+    printf 'yamlcmake = "%s"\n' "${yamlcmake}"
+  } > "${conf}"
+}
+
+write_apptainer_conf() {
+  local conf="$1"
+  local image_path=""
+
+  command -v apptainer >/dev/null 2>&1 || die "apptainer command not found"
+
+  read -e -r -p "Enter the path to Apptainer image (.sif)> " image_path
+  require_file "${image_path}"
+  image_path="$(resolve_path "${image_path}")"
+
+  {
+    printf '[version]\n'
+    printf 'type = "apptainer"\n'
+    printf 'image = "%s"\n' "${image_path}"
+  } > "${conf}"
+}
+
+main() {
+  [[ -n "${ARTENV_ROOT:-}" ]] || die "ARTENV_ROOT is not set"
+  [[ $# -eq 1 ]] || die "usage: artenv register-version <version>"
+
+  local version="$1"
+  local version_conf="${ARTENV_ROOT}/versions/${version}.toml"
+  local version_type=""
+
+  [[ "${version}" != */* ]] || die "version name must not contain /"
+  [[ "${version}" != "." && "${version}" != ".." ]] || die "invalid version name"
+  [[ ! -e "${version_conf}" ]] || die "${version} already exists"
+
+  echo "Select version type"
+  select version_type in "native" "apptainer"; do
+    if [[ -n "${version_type:-}" ]]; then
+      break
+    else
+      echo "Wrong selection"
+    fi
+  done
+
   ensure_dir "${ARTENV_ROOT}/versions"
-  tmp_dir="$(mktemp -d "${ARTENV_ROOT}/versions/.tmp.${version}.XXXXXX")"
-  trap 'rm -rf -- "${tmp_dir}"' EXIT
 
-  ln -s -- "${artsys}"    "${tmp_dir}/artsys"
-  ln -s -- "${rootsys}"   "${tmp_dir}/rootsys"
-  ln -s -- "${yamllib}"   "${tmp_dir}/yamllib"
-  ln -s -- "${yamlcmake}" "${tmp_dir}/yamlcmake"
+  local tmp_conf
+  tmp_conf="$(mktemp "${ARTENV_ROOT}/versions/.tmp.${version}.XXXXXX.toml")"
+  trap 'rm -f -- "${tmp_conf}"' EXIT
 
-  mv -- "${tmp_dir}" "${version_dir}"
+  if [[ "${version_type}" == "apptainer" ]]; then
+    write_apptainer_conf "${tmp_conf}"
+  else
+    write_native_conf "${tmp_conf}"
+  fi
+
+  mv -- "${tmp_conf}" "${version_conf}"
   trap - EXIT
 
   printf '%s was registered\n' "${version}"
