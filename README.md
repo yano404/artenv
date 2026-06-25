@@ -18,6 +18,8 @@ git clone https://github.com/yano404/artenv.git ~/.artenv
 
 ## Setup
 
+### 1. Shell configuration
+
 Add to your `.bashrc` or `.zshrc` :
 
 ```
@@ -32,7 +34,27 @@ Restart your shell.
 exec $SHELL
 ```
 
-Register artemis:
+### 2. Install Artemis
+
+Choose one of the following depending on your use case.
+
+#### Apptainer (recommended)
+
+Pull the Artemis container image and register it as a version:
+
+```sh
+artenv install latest
+```
+
+Available tags can be listed with:
+
+```sh
+artenv install --list
+```
+
+#### Native (existing installation)
+
+If you have already built Artemis from source, register it manually:
 
 ```sh
 artenv register-version <version-name>
@@ -46,19 +68,7 @@ Enter the path to yaml-cpp> /path/to/yaml-cpp
 <version-name> was registered
 ```
 
-To register an Apptainer image as a version:
-
-```sh
-artenv register-version <version-name>
-Select version type
-1) native
-2) apptainer
-#? 2
-Enter the path to Apptainer image (.sif)> /path/to/artemis.sif
-<version-name> was registered
-```
-
-Register analysis environment:
+### 3. Register analysis environment
 
 ```sh
 artenv register-env <env-name>
