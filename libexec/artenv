@@ -85,14 +85,6 @@ case "$command" in
   fi
 
   shift 1
-  if [[ "${1:-}" == "--help" ]]; then
-    if [[ "$command" == "sh-"* ]]; then
-      echo "artenv help \"$command\""
-    else
-      exec artenv-help "$command"
-    fi
-  else
-    exec "$command_path" "$@"
-  fi
+  exec "$command_path" "$@"
   ;;
 esac

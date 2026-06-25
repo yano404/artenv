@@ -13,19 +13,6 @@ print_ng() {
   printf '  [NG] %s\n' "$1"
 }
 
-check_exists() {
-  local label="$1"
-  local path="$2"
-
-  if [[ -e "${path}" || -L "${path}" ]]; then
-    print_ok "${label}: ${path}"
-    return 0
-  else
-    print_ng "${label}: ${path}"
-    return 1
-  fi
-}
-
 check_dir() {
   local label="$1"
   local path="$2"
@@ -52,79 +39,84 @@ check_file() {
   fi
 }
 
-check_resolved_dir() {
-  local label="$1"
-  local path="$2"
-  local resolved=""
-
-  if resolved="$(resolve_path "${path}" 2>/dev/null)" && [[ -d "${resolved}" ]]; then
-    print_ok "${label}: ${resolved}"
-    return 0
-  else
-    print_ng "${label}: ${path}"
-    return 1
-  fi
-}
-
-check_git_repos() {
-  local env_dir="$1"
-  local git_value=""
-
-  if git_value="$(read_git_repos "${env_dir}/git_repos" 2>/dev/null)"; then
-    if [[ -n "${git_value}" ]]; then
-      print_ok "git_repos: ${git_value}"
-    else
-      print_ng "git_repos: empty"
-    fi
-  else
-    print_ok "git_repos: not set"
-  fi
-}
-
 doctor_env() {
   local env_name="$1"
-  local env_dir="${ARTENV_ROOT}/envs/${env_name}"
-  local version_link="${env_dir}/version"
-  local work_link="${env_dir}/work"
-  local version_dir=""
-  local resolved_rootsys=""
+  local env_conf="${ARTENV_ROOT}/envs/${env_name}.toml"
   local ok=0
 
   printf 'env: %s\n' "${env_name}"
 
-  check_dir "env dir" "${env_dir}" || ok=1
-  check_exists "version link" "${version_link}" || ok=1
-  check_exists "work link" "${work_link}" || ok=1
+  check_file "env config" "${env_conf}" || { ok=1; printf 'result: NG\n\n'; return 1; }
 
-  if version_dir="$(resolve_path "${version_link}" 2>/dev/null)"; then
-    check_dir "version dir" "${version_dir}" || ok=1
+  local version_name work_dir git_repos use_artlogin_raw
+  version_name="$(toml_get "${env_conf}" 'env' 'version')"
+  work_dir="$(toml_get "${env_conf}" 'env' 'work')"
+  git_repos="$(toml_get "${env_conf}" 'env' 'git_repos' '')"
+  use_artlogin_raw="$(toml_get "${env_conf}" 'env' 'use_artlogin' 'false')"
 
-    check_exists "artsys link" "${version_dir}/artsys" || ok=1
-    check_exists "rootsys link" "${version_dir}/rootsys" || ok=1
-    check_exists "yamllib link" "${version_dir}/yamllib" || ok=1
-    check_exists "yamlcmake link" "${version_dir}/yamlcmake" || ok=1
-
-    check_resolved_dir "artsys" "${version_dir}/artsys" || ok=1
-    check_resolved_dir "rootsys" "${version_dir}/rootsys" || ok=1
-    check_resolved_dir "yamllib" "${version_dir}/yamllib" || ok=1
-    check_resolved_dir "yamlcmake" "${version_dir}/yamlcmake" || ok=1
-
-    if resolved_rootsys="$(resolve_path "${version_dir}/rootsys" 2>/dev/null)"; then
-      check_file "root-config" "${resolved_rootsys}/bin/root-config" || ok=1
-    else
-      print_ng "root-config: ROOTSYS could not be resolved"
-      ok=1
-    fi
+  if [[ -n "${version_name}" ]]; then
+    print_ok "env.version: ${version_name}"
   else
-    print_ng "version dir: could not resolve ${version_link}"
+    print_ng "env.version: not set"
     ok=1
   fi
 
-  check_resolved_dir "work dir" "${work_link}" || ok=1
-  check_git_repos "${env_dir}"
+  local version_conf="${ARTENV_ROOT}/versions/${version_name}.toml"
+  if check_file "version config" "${version_conf}"; then
+    local version_type
+    version_type="$(toml_get "${version_conf}" 'version' 'type' 'native')"
 
-  if [[ -f "${env_dir}/artlogin.sh" ]]; then
-    print_ok "artlogin.sh: ${env_dir}/artlogin.sh"
+    if [[ "${version_type}" == "apptainer" ]]; then
+      local image
+      image="$(toml_get "${version_conf}" 'version' 'image')"
+      check_file "image" "${image}" || ok=1
+
+      if command -v apptainer >/dev/null 2>&1; then
+        print_ok "apptainer: $(command -v apptainer)"
+      else
+        print_ng "apptainer: command not found"
+        ok=1
+      fi
+
+      local binds
+      binds="$(yq -p toml -oy -r '.env.binds // [] | join(",")' "${env_conf}")"
+      if [[ -n "${binds}" ]]; then
+        local IFS=','
+        local bind_path
+        for bind_path in ${binds}; do
+          check_dir "bind" "${bind_path}" || ok=1
+        done
+      else
+        print_ok "binds: not set"
+      fi
+    else
+      local artsys rootsys yamllib yamlcmake
+      artsys="$(toml_get "${version_conf}" 'version' 'artsys')"
+      rootsys="$(toml_get "${version_conf}" 'version' 'rootsys')"
+      yamllib="$(toml_get "${version_conf}" 'version' 'yamllib')"
+      yamlcmake="$(toml_get "${version_conf}" 'version' 'yamlcmake')"
+
+      check_dir "artsys" "${artsys}"    || ok=1
+      check_dir "rootsys" "${rootsys}"  || ok=1
+      check_dir "yamllib" "${yamllib}"  || ok=1
+      check_dir "yamlcmake" "${yamlcmake}" || ok=1
+      check_file "root-config" "${rootsys}/bin/root-config" || ok=1
+    fi
+  else
+    ok=1
+  fi
+
+  check_dir "work dir" "${work_dir}" || ok=1
+
+  if [[ -n "${git_repos}" ]]; then
+    print_ok "git_repos: ${git_repos}"
+  else
+    print_ok "git_repos: not set"
+  fi
+
+  if [[ "${use_artlogin_raw}" == "true" ]]; then
+    local artlogin_sh="${ARTENV_ROOT}/envs/${env_name}.artlogin.sh"
+    check_file "artlogin.sh" "${artlogin_sh}" || ok=1
   else
     print_ok "artlogin.sh: not set"
   fi
@@ -146,25 +138,23 @@ doctor_current() {
 
 doctor_all() {
   local envs_dir="${ARTENV_ROOT}/envs"
-  local -a entries=()
-  local entry
-  local name
   local failed=0
 
-  check_dir "envs dir" "${envs_dir}" >/dev/null 2>&1 || die "envs directory not found: ${envs_dir}"
+  require_dir "${envs_dir}"
 
+  local -a confs=()
   shopt -s nullglob
-  entries=("${envs_dir}"/*)
+  confs=("${envs_dir}"/*.toml)
   shopt -u nullglob
 
-  if [[ ${#entries[@]} -eq 0 ]]; then
+  if [[ ${#confs[@]} -eq 0 ]]; then
     die "no environments are registered"
   fi
 
-  for entry in "${entries[@]}"; do
-    [[ -d "${entry}" ]] || continue
-    name="$(basename "${entry}")"
-    if ! doctor_env "${name}"; then
+  local conf env_name
+  for conf in "${confs[@]}"; do
+    env_name="$(basename "${conf}" .toml)"
+    if ! doctor_env "${env_name}"; then
       failed=1
     fi
   done
@@ -174,6 +164,7 @@ doctor_all() {
 
 main() {
   [[ -n "${ARTENV_ROOT:-}" ]] || die "ARTENV_ROOT is not set"
+  require_yq
   [[ $# -le 1 ]] || die "usage: artenv doctor [env|--all]"
 
   if [[ $# -eq 0 ]]; then

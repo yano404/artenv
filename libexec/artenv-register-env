@@ -10,53 +10,47 @@ main() {
   [[ -n "${ARTENV_ROOT:-}" ]] || die "ARTENV_ROOT is not set"
   [[ $# -eq 1 ]] || die "usage: artenv register-env <env>"
 
+  require_yq
+
   local env_name="$1"
-  local env_dir="${ARTENV_ROOT}/envs/${env_name}"
+  local env_conf="${ARTENV_ROOT}/envs/${env_name}.toml"
   local versions_dir="${ARTENV_ROOT}/versions"
-  local tmp_dir
+  local template_artlogin="${ARTENV_ROOT}/libexec/artlogin.sh"
 
   local work=""
   local git_repos=""
   local use_artlogin=""
   local version_name=""
-  local version_dir=""
-  local template_artlogin="${ARTENV_ROOT}/libexec/artlogin.sh"
 
   [[ -n "${env_name}" ]] || die "environment name is empty"
   [[ "${env_name}" != */* ]] || die "environment name must not contain /"
   [[ "${env_name}" != "." && "${env_name}" != ".." ]] || die "invalid environment name"
-  [[ ! -e "${env_dir}" ]] || die "${env_name} already exists"
+  [[ ! -e "${env_conf}" ]] || die "${env_name} already exists"
 
   require_dir "${versions_dir}"
 
-  local -a version_entries=()
   local -a version_names=()
-  local entry
+  local conf_file
 
   shopt -s nullglob
-  version_entries=("${versions_dir}"/*)
-  shopt -u nullglob
-
-  [[ ${#version_entries[@]} -gt 0 ]] || die "no artemis versions are registered"
-
-  for entry in "${version_entries[@]}"; do
-    [[ -d "${entry}" ]] || continue
-    version_names+=("$(basename "${entry}")")
+  for conf_file in "${versions_dir}"/*.toml; do
+    local name
+    name="$(basename "${conf_file}" .toml)"
+    version_names+=("${name}")
   done
+  shopt -u nullglob
 
   [[ ${#version_names[@]} -gt 0 ]] || die "no artemis versions are registered"
 
   echo "Select the artemis version"
   select version_name in "${version_names[@]}"; do
     if [[ -n "${version_name:-}" ]]; then
-      version_dir="${versions_dir}/${version_name}"
       break
     else
       echo "Wrong selection"
     fi
   done
 
-  require_dir "${version_dir}"
   echo "${version_name} was selected"
 
   read -e -r -p "Enter the path to working directory> " work
@@ -83,25 +77,33 @@ main() {
   done
 
   ensure_dir "${ARTENV_ROOT}/envs"
-  tmp_dir="$(mktemp -d "${ARTENV_ROOT}/envs/.tmp.${env_name}.XXXXXX")"
-  trap 'rm -rf -- "${tmp_dir}"' EXIT
 
-  ln -s -- "${version_dir}" "${tmp_dir}/version"
-  ln -s -- "${work}" "${tmp_dir}/work"
+  local tmp_conf
+  tmp_conf="$(mktemp "${ARTENV_ROOT}/envs/.tmp.${env_name}.XXXXXX.toml")"
+  trap 'rm -f -- "${tmp_conf}"' EXIT
 
-  if [[ -n "${git_repos:-}" ]]; then
-    printf '%s\n' "${git_repos}" > "${tmp_dir}/git_repos"
-  fi
+  {
+    printf '[env]\n'
+    printf 'version = "%s"\n' "${version_name}"
+    printf 'work = "%s"\n'    "${work}"
+    if [[ -n "${git_repos:-}" ]]; then
+      printf 'git_repos = "%s"\n' "${git_repos}"
+    fi
+    if [[ "${use_artlogin}" == "y" || "${use_artlogin}" == "Y" ]]; then
+      printf 'use_artlogin = true\n'
+    else
+      printf 'use_artlogin = false\n'
+    fi
+  } > "${tmp_conf}"
+
+  mv -- "${tmp_conf}" "${env_conf}"
+  trap - EXIT
 
   if [[ "${use_artlogin}" == "y" || "${use_artlogin}" == "Y" ]]; then
-    cp -- "${template_artlogin}" "${tmp_dir}/artlogin.sh"
+    cp -- "${template_artlogin}" "${ARTENV_ROOT}/envs/${env_name}.artlogin.sh"
   fi
-
-  mv -- "${tmp_dir}" "${env_dir}"
-  trap - EXIT
 
   printf '%s was registered\n' "${env_name}"
 }
 
 main "$@"
-

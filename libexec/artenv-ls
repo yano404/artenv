@@ -1,26 +1,31 @@
 #!/usr/bin/env bash
 
-set -e
+set -euo pipefail
 
-envs_dir="${ARTENV_ROOT}/envs"
+script_dir="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
+# shellcheck source=/dev/null
+source "${script_dir}/util.sh"
 
-if [[ -d "${envs_dir}" ]]; then
-    envs_dir="$(realpath "$envs_dir")"
-else
-    echo "${ARTENV_ROOT}/envs not found"
-fi
+main() {
+  [[ -n "${ARTENV_ROOT:-}" ]] || die "ARTENV_ROOT is not set"
 
-current_env=$ART_PROJECT
-hit_prefix="* "
-miss_prefix="  "
+  local envs_dir="${ARTENV_ROOT}/envs"
+  local current_env="${ART_PROJECT:-}"
 
-envs_dir_entries=("$envs_dir"/*)
+  local -a confs=()
+  shopt -s nullglob
+  confs=("${envs_dir}"/*.toml)
+  shopt -u nullglob
 
-for path in "${envs_dir_entries[@]}"; do
-    env=${path##*/}
-    if [[ "${env}" == "${current_env}" ]]; then
-        echo "${hit_prefix}${env}"
+  local conf env_name
+  for conf in "${confs[@]}"; do
+    env_name="$(basename "${conf}" .toml)"
+    if [[ "${env_name}" == "${current_env}" ]]; then
+      printf '* %s\n' "${env_name}"
     else
-        echo "${miss_prefix}${env}"
+      printf '  %s\n' "${env_name}"
     fi
-done
+  done
+}
+
+main "$@"

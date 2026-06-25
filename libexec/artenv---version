@@ -2,7 +2,7 @@
 
 set -euo pipefail
 
-version='v1.0.0'
+version='v2.0.0'
 
 script_dir="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 repo_root="$(cd -- "${script_dir}/.." && pwd)"

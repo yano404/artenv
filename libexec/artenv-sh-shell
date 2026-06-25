@@ -11,31 +11,20 @@ print_export() {
   printf 'export %s=%q\n' "${name}" "${value}"
 }
 
-main() {
-  [[ -n "${ARTENV_ROOT:-}" ]] || die "ARTENV_ROOT is not set"
-  [[ $# -le 1 ]] || die 'usage: artenv shell [env]'
-
-  if [[ $# -eq 0 ]]; then
-    [[ -n "${ART_PROJECT:-}" ]] || die "ART_PROJECT is not set"
-    printf 'echo "%s"\n' "${ART_PROJECT}"
-    exit 0
-  fi
-
+activate_native() {
   local env="$1"
-  local env_dir="${ARTENV_ROOT}/envs/${env}"
+  local art_version="$2"
+  local work_dir="$3"
+  local git_repos="$4"
+  local use_artlogin="$5"
+  local artlogin_sh="$6"
+  local artsys="$7"
+  local rootsys="$8"
+  local yamllib="$9"
+  local yamlcmake="${10}"
 
-  load_env_metadata "${env_dir}"
-
-  local work_dir="${ENV_WORK_DIR}"
-  local art_version="${ENV_VERSION_NAME}"
-  local artsys="${ENV_ARTSYS}"
-  local rootsys="${ENV_ROOTSYS}"
   local root_version
   root_version="$(basename "${rootsys}")"
-  local yamllib="${ENV_YAMLLIB}"
-  local yamlcmake="${ENV_YAMLCMAKE}"
-  local git_repos="${ENV_GIT_REPOS}"
-  local use_artlogin="${ENV_USE_ARTLOGIN}"
 
   local path="${PATH:-}"
   local libpath="${LIBPATH:-}"
@@ -90,6 +79,8 @@ main() {
   cmake_prefix_path="$(prepend_path "${cmake_prefix_path}" "${artsys}")"
   cmake_prefix_path="$(prepend_path "${cmake_prefix_path}" "${yamlcmake}")"
 
+  printf 'for _artenv_cmd in artemis cmake make root artexec; do declare -f "${_artenv_cmd}" &>/dev/null && unset -f "${_artenv_cmd}"; done; unset _artenv_cmd\n'
+
   print_export "ART_PROJECT" "${env}"
   print_export "ROOT_VERSION" "${root_version}"
   print_export "ROOTSYS" "${rootsys}"
@@ -106,6 +97,7 @@ main() {
   print_export "ART_ANALYSIS_DIR" "${work_dir}"
   print_export "ART_WORK_DIR" "${work_dir}"
   print_export "ART_REPOS" "${git_repos}"
+  printf 'unset ART_APPTAINER_IMAGE\n'
 
   printf 'alias acd=%q\n' "cd ${work_dir}"
   printf 'type artlogin &>/dev/null && unset -f artlogin\n'
@@ -114,12 +106,82 @@ main() {
     print_export "USE_ARTLOGIN" "YES"
     printf 'artlogin() {\n'
     # shellcheck disable=SC2016
-    printf '  . %q "$1"\n' "${env_dir}/artlogin.sh"
+    printf '  . %q "$1"\n' "${artlogin_sh}"
     # shellcheck disable=SC2016
     printf '  alias acd=%q\n' 'cd $ART_WORK_DIR'
     printf '}\n'
   else
     print_export "USE_ARTLOGIN" "NO"
+  fi
+}
+
+activate_apptainer() {
+  local env="$1"
+  local art_version="$2"
+  local work_dir="$3"
+  local git_repos="$4"
+  local image="$5"
+  local binds="$6"
+
+  print_export "ART_PROJECT" "${env}"
+  print_export "ART_VERSION" "${art_version}"
+  print_export "ART_APPTAINER_IMAGE" "${image}"
+  print_export "ART_BINDS" "${binds}"
+  print_export "ART_ANALYSIS_DIR" "${work_dir}"
+  print_export "ART_WORK_DIR" "${work_dir}"
+  print_export "ART_REPOS" "${git_repos}"
+  print_export "USE_ARTLOGIN" "NO"
+
+  printf 'alias acd=%q\n' "cd ${work_dir}"
+  printf 'type artlogin &>/dev/null && unset -f artlogin\n'
+
+  local bind_str="${work_dir}"
+  if [[ -n "${binds}" ]]; then
+    bind_str="${bind_str},${binds}"
+  fi
+
+  for cmd in artemis cmake make root; do
+    printf '%s() { apptainer exec --bind %q %q %s "$@"; }\n' \
+      "${cmd}" "${bind_str}" "${image}" "${cmd}"
+  done
+  printf 'artexec() { apptainer exec --bind %q %q "$@"; }\n' \
+    "${bind_str}" "${image}"
+}
+
+main() {
+  [[ -n "${ARTENV_ROOT:-}" ]] || die "ARTENV_ROOT is not set"
+  [[ $# -le 1 ]] || die 'usage: artenv shell [env]'
+
+  if [[ $# -eq 0 ]]; then
+    [[ -n "${ART_PROJECT:-}" ]] || die "ART_PROJECT is not set"
+    printf 'echo "%s"\n' "${ART_PROJECT}"
+    exit 0
+  fi
+
+  local env="$1"
+
+  load_env_metadata "${env}"
+
+  if [[ "${ENV_VERSION_TYPE}" == "apptainer" ]]; then
+    activate_apptainer \
+      "${env}" \
+      "${ENV_VERSION_NAME}" \
+      "${ENV_WORK_DIR}" \
+      "${ENV_GIT_REPOS}" \
+      "${ENV_APPTAINER_IMAGE}" \
+      "${ENV_BINDS}"
+  else
+    activate_native \
+      "${env}" \
+      "${ENV_VERSION_NAME}" \
+      "${ENV_WORK_DIR}" \
+      "${ENV_GIT_REPOS}" \
+      "${ENV_USE_ARTLOGIN}" \
+      "${ENV_ARTLOGIN_SH}" \
+      "${ENV_ARTSYS}" \
+      "${ENV_ROOTSYS}" \
+      "${ENV_YAMLLIB}" \
+      "${ENV_YAMLCMAKE}"
   fi
 }
 

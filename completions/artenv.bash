@@ -6,7 +6,20 @@ _artenv_list_commands() {
 
 _artenv_list_envs() {
   [[ -n "${ARTENV_ROOT:-}" && -d "${ARTENV_ROOT}/envs" ]] || return 0
-  command ls -1 "${ARTENV_ROOT}/envs" 2>/dev/null
+  local f
+  for f in "${ARTENV_ROOT}/envs"/*.toml; do
+    [[ -f "${f}" ]] || continue
+    basename "${f}" .toml
+  done
+}
+
+_artenv_list_versions() {
+  [[ -n "${ARTENV_ROOT:-}" && -d "${ARTENV_ROOT}/versions" ]] || return 0
+  local f
+  for f in "${ARTENV_ROOT}/versions"/*.toml; do
+    [[ -f "${f}" ]] || continue
+    basename "${f}" .toml
+  done
 }
 
 _artenv_completion() {
@@ -20,8 +33,16 @@ _artenv_completion() {
   fi
 
   case "${cmd}" in
-    shell|default|info|doctor)
+    shell|default|info)
       COMPREPLY=( $(compgen -W "$(_artenv_list_envs)" -- "${cur}") )
+      return 0
+      ;;
+    doctor)
+      COMPREPLY=( $(compgen -W "--all $(_artenv_list_envs)" -- "${cur}") )
+      return 0
+      ;;
+    install)
+      COMPREPLY=( $(compgen -W "--native --apptainer --update --list -l --help -h" -- "${cur}") )
       return 0
       ;;
     *)

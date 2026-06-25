@@ -1,24 +1,31 @@
 #!/usr/bin/env bash
 
-set -e
+set -euo pipefail
 
-versions_dir="${ARTENV_ROOT}/versions"
+script_dir="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
+# shellcheck source=/dev/null
+source "${script_dir}/util.sh"
 
-if [[ -d "${versions_dir}" ]]; then
-    versions_dir="$(realpath "${versions_dir}")"
-fi
+main() {
+  [[ -n "${ARTENV_ROOT:-}" ]] || die "ARTENV_ROOT is not set"
 
-current_version="${ART_VERSION}"
-hit_prefix="* "
-miss_prefix="  "
+  local versions_dir="${ARTENV_ROOT}/versions"
+  local current_version="${ART_VERSION:-}"
 
-versions_dir_entries=("$versions_dir"/*)
+  local -a confs=()
+  shopt -s nullglob
+  confs=("${versions_dir}"/*.toml)
+  shopt -u nullglob
 
-for path in "${versions_dir_entries[@]}"; do
-    version=${path##*/}
-    if [[ "${version}" == "${current_version}" ]]; then
-        echo "${hit_prefix}${version}"
+  local conf version_name
+  for conf in "${confs[@]}"; do
+    version_name="$(basename "${conf}" .toml)"
+    if [[ "${version_name}" == "${current_version}" ]]; then
+      printf '* %s\n' "${version_name}"
     else
-        echo "${miss_prefix}${version}"
+      printf '  %s\n' "${version_name}"
     fi
-done
+  done
+}
+
+main "$@"
