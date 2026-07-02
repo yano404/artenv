@@ -54,6 +54,35 @@ image = "${EXTDIR}/$1.sif"
 EOF
 }
 
+apptainer_version_full() { # <name>  (apptainer version carrying uri + digest)
+  touch "${ARTENV_ROOT}/images/$1.sif"
+  cat > "${ARTENV_ROOT}/versions/$1.toml" <<EOF
+[version]
+type = "apptainer"
+uri = "docker://example.org/artemis:$1"
+image = "${ARTENV_ROOT}/images/$1.sif"
+digest = "sha256:deadbeef"
+EOF
+}
+
+make_rich_env() { # <name> <version>  (env carrying git_repos, binds, use_artlogin)
+  cat > "${ARTENV_ROOT}/envs/$1.toml" <<EOF
+[env]
+version = "$2"
+work = "/tmp"
+git_repos = "/tmp/repos/$1"
+binds = ["/data:/data", "/scratch"]
+use_artlogin = true
+EOF
+  touch "${ARTENV_ROOT}/envs/$1.artlogin.sh"
+  return 0
+}
+
+# Read a scalar field straight from a TOML file (test-side, via yq).
+toml_field() { # <file> <section> <key>
+  yq -p toml -oy -r ".$2.$3 // \"\"" "$1"
+}
+
 make_env() { # <name> <version> [artlogin:true|false]
   local artlogin="${3:-false}"
   cat > "${ARTENV_ROOT}/envs/$1.toml" <<EOF
