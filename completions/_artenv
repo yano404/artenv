@@ -33,8 +33,16 @@ _artenv() {
   fi
 
   case "${words[2]}" in
-    shell|default|info)
+    register-env|register-version)
+      # register takes a new (not-yet-existing) name; offer no completion
+      return 0
+      ;;
+    *-env|shell|default|info)
       compadd -- "${envs[@]}"
+      return 0
+      ;;
+    *-version)
+      compadd -- "${versions[@]}"
       return 0
       ;;
     doctor)
