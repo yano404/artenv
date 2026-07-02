@@ -147,8 +147,8 @@ binds        = ["/extra/path"]         # additional Apptainer bind paths (option
 
 ## Commands
 
-- `ls`                         : Print the environment list
-- `versions`                   : Print the artemis versions
+- `ls [-a|--all]`              : Print the environment list (`--all` includes archived)
+- `versions [-a|--all]`        : Print the artemis versions (`--all` includes archived)
 - `version`                    : Print the current artemis version
 - `info [env]`                 : Print the detail information of environment
 - `shell [env]`                : Set or show the activated environment in the current shell
@@ -159,6 +159,10 @@ binds        = ["/extra/path"]         # additional Apptainer bind paths (option
 - `register-env <env>`         : Register analysis environment
 - `remove-version [version]`   : Remove a registered artemis version
 - `remove-env [env]`           : Remove a registered analysis environment
+- `archive-version [version]`  : Archive a version (hidden from `versions`, still usable)
+- `archive-env [env]`          : Archive an environment (hidden from `ls`, still usable)
+- `unarchive-version [version]`: Unarchive a version
+- `unarchive-env [env]`        : Unarchive an environment
 - `new <dir>`                  : Create the working directory using the templates
 - `install [--native|--apptainer] [TAG]` : Install artemis (build from source or pull Apptainer image)
 - `install --update <version>`     : Re-pull the Apptainer image for an existing version
@@ -301,6 +305,31 @@ $ artenv remove-version --purge artemis-latest
 Remove version 'artemis-latest'? (y/N)> y
 removed image: /home/yano/.artenv/images/artemis-latest.sif
 artemis-latest was removed
+```
+
+- `artenv archive-env` / `artenv archive-version`
+
+Archiving is a non-destructive, reversible way to retire a version or
+environment. An archived entry is hidden from the default `artenv ls` /
+`artenv versions` listing, but it can still be resolved and activated, and it
+is never deleted. Use `-a`/`--all` to see archived entries, and `unarchive-*`
+to bring them back.
+
+```
+$ artenv archive-env e545
+e545 was archived
+
+$ artenv ls
+* e559
+  h424
+
+$ artenv ls --all
+  e545 (archived)
+* e559
+  h424
+
+$ artenv unarchive-env e545
+e545 was unarchived
 ```
 
 - `artenv doctor`

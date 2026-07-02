@@ -53,6 +53,28 @@ toml_get() {
   yq -p toml -oy -r ".${section}.${key} // \"${default}\"" "${file}"
 }
 
+set_archived_flag() {
+  # Set or clear the `archived` flag in a single-table TOML file.
+  # yq v4 cannot write TOML tables, so this is a text operation that
+  # preserves every other field (uri/digest/git_repos/binds/...).
+  local conf="$1"
+  local value="$2"
+  require_file "${conf}"
+
+  local dir tmp
+  dir="$(dirname -- "${conf}")"
+  tmp="$(mktemp "${dir}/.tmp.archived.XXXXXX")"
+
+  # Drop any existing archived line; the table header is always kept.
+  grep -v '^archived[[:space:]]*=' -- "${conf}" > "${tmp}" || true
+
+  if [[ "${value}" == "true" ]]; then
+    printf 'archived = true\n' >> "${tmp}"
+  fi
+
+  mv -- "${tmp}" "${conf}"
+}
+
 remove_path() {
   local path_list="${1-}"
   local target="${2-}"

@@ -31,16 +31,25 @@ main() {
 
   local -a version_names=()
   local conf_file
+  local total_versions=0
 
   shopt -s nullglob
   for conf_file in "${versions_dir}"/*.toml; do
     local name
     name="$(basename "${conf_file}" .toml)"
+    total_versions=$((total_versions + 1))
+    # Archived versions are hidden from new-env selection.
+    [[ "$(toml_get "${conf_file}" version archived false)" == "true" ]] && continue
     version_names+=("${name}")
   done
   shopt -u nullglob
 
-  [[ ${#version_names[@]} -gt 0 ]] || die "no artemis versions are registered"
+  if [[ ${#version_names[@]} -eq 0 ]]; then
+    if [[ ${total_versions} -gt 0 ]]; then
+      die "all versions are archived; unarchive one first"
+    fi
+    die "no artemis versions are registered"
+  fi
 
   echo "Select the artemis version"
   select version_name in "${version_names[@]}"; do
