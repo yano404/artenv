@@ -16,6 +16,8 @@ Commands:
   --version         Show the version of artenv
   register-version  Register an artemis version
   register-env      Register analysis environment
+  remove-version    Remove a registered artemis version
+  remove-env        Remove a registered environment
   new               Create the new working directory from templates
   install           Install artemis (--native: build from source, --apptainer: pull image)
   doctor            Diagnose a registered environment

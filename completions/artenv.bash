@@ -33,8 +33,17 @@ _artenv_completion() {
   fi
 
   case "${cmd}" in
-    shell|default|info)
+    register-env|register-version)
+      # register takes a new (not-yet-existing) name; offer no completion
+      COMPREPLY=()
+      return 0
+      ;;
+    *-env|shell|default|info)
       COMPREPLY=( $(compgen -W "$(_artenv_list_envs)" -- "${cur}") )
+      return 0
+      ;;
+    *-version)
+      COMPREPLY=( $(compgen -W "$(_artenv_list_versions)" -- "${cur}") )
       return 0
       ;;
     doctor)

@@ -157,6 +157,8 @@ binds        = ["/extra/path"]         # additional Apptainer bind paths (option
 - `--version`                  : Show the version of artenv
 - `register-version <version>` : Register a artemis version
 - `register-env <env>`         : Register analysis environment
+- `remove-version [version]`   : Remove a registered artemis version
+- `remove-env [env]`           : Remove a registered analysis environment
 - `new <dir>`                  : Create the working directory using the templates
 - `install [--native|--apptainer] [TAG]` : Install artemis (build from source or pull Apptainer image)
 - `install --update <version>`     : Re-pull the Apptainer image for an existing version
@@ -277,6 +279,28 @@ Update:
   SIF                    /home/yano/.artenv/images/artemis-latest.sif
   DIGEST                 sha256:121ea823...
 OK? (y/N)> y
+```
+
+- `artenv remove-version` / `artenv remove-env`
+
+```
+$ artenv remove-env e559
+Remove environment 'e559'? (y/N)> y
+e559 was removed
+
+$ artenv remove-version artemis-e559
+artenv: version 'artemis-e559' is used by the following environments:
+  - e545
+remove these environments first, or use --force
+```
+
+Remove the SIF image together with an Apptainer version:
+
+```
+$ artenv remove-version --purge artemis-latest
+Remove version 'artemis-latest'? (y/N)> y
+removed image: /home/yano/.artenv/images/artemis-latest.sif
+artemis-latest was removed
 ```
 
 - `artenv doctor`

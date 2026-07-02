@@ -1,0 +1,132 @@
+#!/usr/bin/env bash
+
+set -euo pipefail
+
+script_dir="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
+# shellcheck source=/dev/null
+source "${script_dir}/util.sh"
+
+usage() {
+  cat <<'EOS'
+usage: artenv remove-version [-f|--force] [--purge] [-y|--yes] [<version>]
+
+Remove a registered artemis version. With no <version>, choose interactively.
+
+Options:
+  -f, --force   Remove even if environments reference this version
+  --purge       Also delete the Apptainer SIF image (only under $ARTENV_ROOT/images/)
+  -y, --yes     Do not prompt for confirmation
+  -h, --help    Show this help
+EOS
+}
+
+main() {
+  [[ -n "${ARTENV_ROOT:-}" ]] || die "ARTENV_ROOT is not set"
+  require_yq
+
+  local force=0 purge=0 assume_yes=0
+  local version=""
+
+  while [[ $# -gt 0 ]]; do
+    case "$1" in
+      -f|--force) force=1; shift ;;
+      --purge)    purge=1; shift ;;
+      -y|--yes)   assume_yes=1; shift ;;
+      -h|--help)  usage; exit 0 ;;
+      -*)         die "unknown option: $1" ;;
+      *)
+        [[ -z "${version}" ]] || die "usage: artenv remove-version [options] <version>"
+        version="$1"; shift ;;
+    esac
+  done
+
+  local versions_dir="${ARTENV_ROOT}/versions"
+  require_dir "${versions_dir}"
+
+  if [[ -z "${version}" ]]; then
+    local -a version_names=()
+    local conf_file name
+    shopt -s nullglob
+    for conf_file in "${versions_dir}"/*.toml; do
+      name="$(basename "${conf_file}" .toml)"
+      version_names+=("${name}")
+    done
+    shopt -u nullglob
+
+    [[ ${#version_names[@]} -gt 0 ]] || die "no artemis versions are registered"
+
+    echo "Select the version to remove"
+    select version in "${version_names[@]}"; do
+      if [[ -n "${version:-}" ]]; then
+        break
+      else
+        echo "Wrong selection"
+      fi
+    done
+  fi
+
+  local version_conf="${versions_dir}/${version}.toml"
+  [[ -f "${version_conf}" ]] || die "version not found: ${version}"
+
+  # Environments that reference this version
+  local -a referencing=()
+  local envs_dir="${ARTENV_ROOT}/envs"
+  if [[ -d "${envs_dir}" ]]; then
+    local env_conf env_name ref
+    shopt -s nullglob
+    for env_conf in "${envs_dir}"/*.toml; do
+      ref="$(yq -p toml -oy -r '.env.version // ""' "${env_conf}")"
+      if [[ "${ref}" == "${version}" ]]; then
+        env_name="$(basename "${env_conf}" .toml)"
+        referencing+=("${env_name}")
+      fi
+    done
+    shopt -u nullglob
+  fi
+
+  if [[ ${#referencing[@]} -gt 0 && "${force}" -ne 1 ]]; then
+    { printf "artenv: version '%s' is used by the following environments:\n" "${version}"
+      printf '  - %s\n' "${referencing[@]}"
+      printf "remove these environments first, or use --force\n"
+    } >&2
+    exit 1
+  fi
+
+  if [[ "${ART_VERSION:-}" == "${version}" ]]; then
+    printf "artenv: warning: '%s' is currently active in this shell\n" "${version}" >&2
+  fi
+
+  # Resolve SIF to purge (only for apptainer versions, and only under images/)
+  local sif=""
+  if [[ "${purge}" -eq 1 ]]; then
+    local vtype
+    vtype="$(yq -p toml -oy -r '.version.type // "native"' "${version_conf}")"
+    if [[ "${vtype}" == "apptainer" ]]; then
+      sif="$(yq -p toml -oy -r '.version.image // ""' "${version_conf}")"
+    fi
+  fi
+
+  if [[ "${assume_yes}" -ne 1 ]]; then
+    local reply=""
+    read -r -p "Remove version '${version}'? (y/N)> " reply || true
+    case "${reply}" in
+      y|Y) ;;
+      *) echo "aborted"; exit 0 ;;
+    esac
+  fi
+
+  if [[ -n "${sif}" ]]; then
+    local images_dir="${ARTENV_ROOT}/images"
+    if [[ "${sif}" == "${images_dir}/"* && -f "${sif}" ]]; then
+      rm -f -- "${sif}"
+      printf 'removed image: %s\n' "${sif}"
+    elif [[ -f "${sif}" ]]; then
+      printf "artenv: warning: not removing image outside images/: %s\n" "${sif}" >&2
+    fi
+  fi
+
+  rm -f -- "${version_conf}"
+  printf '%s was removed\n' "${version}"
+}
+
+main "$@"
