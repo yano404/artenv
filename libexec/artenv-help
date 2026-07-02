@@ -5,25 +5,38 @@ set -e
 cat << EOS
 Usage: artenv <command> <arg>
 
-Commands:
+Environment commands:
+  register          Register an analysis environment
+  remove            Remove a registered environment
+  archive           Archive an environment (hide from \`ls', still usable)
+  unarchive         Unarchive an environment
   ls                Print the environment list
-  versions          Print the artemis versions
-  version           Print the current artemis version
   info              Print detail information of the environment
+  new               Create the new working directory from templates
   shell             Set or show the activated environment in the current shell
   default           Set or show the default environment
+
+Version commands:
+  version <cmd>     Manage artemis versions
+                    (ls/register/remove/archive/unarchive/install/current;
+                     see \`artenv version help')
+
+Utility commands:
   init              Configure the shell environment for artenv
-  --version         Show the version of artenv
-  register-version  Register an artemis version
-  register-env      Register analysis environment
-  remove-version    Remove a registered artemis version
-  remove-env        Remove a registered environment
-  archive-version   Archive a version (hide from `versions`, still usable)
-  archive-env       Archive an environment (hide from `ls`, still usable)
-  unarchive-version Unarchive a version
-  unarchive-env     Unarchive an environment
-  new               Create the new working directory from templates
-  install           Install artemis (--native: build from source, --apptainer: pull image)
   doctor            Diagnose a registered environment
   migrate           Migrate v1 (symlink) data to v2 (TOML)
+  commands          List all available commands
+  --version         Show the version of artenv
+
+Deprecated aliases (kept for compatibility):
+  versions          -> version ls
+  register-version  -> version register
+  remove-version    -> version remove
+  archive-version   -> version archive
+  unarchive-version -> version unarchive
+  install           -> version install
+  register-env      -> register
+  remove-env        -> remove
+  archive-env       -> archive
+  unarchive-env     -> unarchive
 EOS

@@ -33,16 +33,35 @@ _artenv_completion() {
   fi
 
   case "${cmd}" in
-    register-env|register-version)
+    version)
+      # `artenv version <sub> [target]`
+      if [[ ${COMP_CWORD} -eq 2 ]]; then
+        COMPREPLY=( $(compgen -W "ls register remove archive unarchive install current -h" -- "${cur}") )
+      else
+        case "${COMP_WORDS[2]:-}" in
+          remove|archive|unarchive)
+            COMPREPLY=( $(compgen -W "$(_artenv_list_versions)" -- "${cur}") )
+            ;;
+          install)
+            COMPREPLY=( $(compgen -W "--native --apptainer --update --list -l --help -h" -- "${cur}") )
+            ;;
+          *)
+            COMPREPLY=()
+            ;;
+        esac
+      fi
+      return 0
+      ;;
+    register|register-env|register-version)
       # register takes a new (not-yet-existing) name; offer no completion
       COMPREPLY=()
       return 0
       ;;
-    *-env|shell|default|info)
+    remove|archive|unarchive|remove-env|archive-env|unarchive-env|shell|default|info)
       COMPREPLY=( $(compgen -W "$(_artenv_list_envs)" -- "${cur}") )
       return 0
       ;;
-    *-version)
+    remove-version|archive-version|unarchive-version)
       COMPREPLY=( $(compgen -W "$(_artenv_list_versions)" -- "${cur}") )
       return 0
       ;;
