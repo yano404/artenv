@@ -6,8 +6,30 @@ script_dir="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 # shellcheck source=/dev/null
 source "${script_dir}/util.sh"
 
+usage() {
+  cat <<'EOS'
+usage: artenv ls [-a|--all]
+
+Print the environment list. Archived environments are hidden by default.
+
+Options:
+  -a, --all     Include archived environments (marked "(archived)")
+  -h, --help    Show this help
+EOS
+}
+
 main() {
   [[ -n "${ARTENV_ROOT:-}" ]] || die "ARTENV_ROOT is not set"
+  require_yq
+
+  local show_all=0
+  while [[ $# -gt 0 ]]; do
+    case "$1" in
+      -a|--all)  show_all=1; shift ;;
+      -h|--help) usage; exit 0 ;;
+      *)         die "unknown option: $1" ;;
+    esac
+  done
 
   local envs_dir="${ARTENV_ROOT}/envs"
   local current_env="${ART_PROJECT:-}"
@@ -17,14 +39,25 @@ main() {
   confs=("${envs_dir}"/*.toml)
   shopt -u nullglob
 
-  local conf env_name
+  local conf env_name archived marker suffix
   for conf in "${confs[@]}"; do
     env_name="$(basename "${conf}" .toml)"
-    if [[ "${env_name}" == "${current_env}" ]]; then
-      printf '* %s\n' "${env_name}"
+    archived="$(toml_get "${conf}" env archived false)"
+
+    if [[ "${archived}" == "true" ]]; then
+      [[ "${show_all}" -eq 1 ]] || continue
+      suffix=" (archived)"
     else
-      printf '  %s\n' "${env_name}"
+      suffix=""
     fi
+
+    if [[ "${env_name}" == "${current_env}" ]]; then
+      marker='*'
+    else
+      marker=' '
+    fi
+
+    printf '%s %s%s\n' "${marker}" "${env_name}" "${suffix}"
   done
 }
 

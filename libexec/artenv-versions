@@ -6,8 +6,30 @@ script_dir="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 # shellcheck source=/dev/null
 source "${script_dir}/util.sh"
 
+usage() {
+  cat <<'EOS'
+usage: artenv versions [-a|--all]
+
+Print the artemis versions. Archived versions are hidden by default.
+
+Options:
+  -a, --all     Include archived versions (marked "(archived)")
+  -h, --help    Show this help
+EOS
+}
+
 main() {
   [[ -n "${ARTENV_ROOT:-}" ]] || die "ARTENV_ROOT is not set"
+  require_yq
+
+  local show_all=0
+  while [[ $# -gt 0 ]]; do
+    case "$1" in
+      -a|--all)  show_all=1; shift ;;
+      -h|--help) usage; exit 0 ;;
+      *)         die "unknown option: $1" ;;
+    esac
+  done
 
   local versions_dir="${ARTENV_ROOT}/versions"
   local current_version="${ART_VERSION:-}"
@@ -17,14 +39,25 @@ main() {
   confs=("${versions_dir}"/*.toml)
   shopt -u nullglob
 
-  local conf version_name
+  local conf version_name archived marker suffix
   for conf in "${confs[@]}"; do
     version_name="$(basename "${conf}" .toml)"
-    if [[ "${version_name}" == "${current_version}" ]]; then
-      printf '* %s\n' "${version_name}"
+    archived="$(toml_get "${conf}" version archived false)"
+
+    if [[ "${archived}" == "true" ]]; then
+      [[ "${show_all}" -eq 1 ]] || continue
+      suffix=" (archived)"
     else
-      printf '  %s\n' "${version_name}"
+      suffix=""
     fi
+
+    if [[ "${version_name}" == "${current_version}" ]]; then
+      marker='*'
+    else
+      marker=' '
+    fi
+
+    printf '%s %s%s\n' "${marker}" "${version_name}" "${suffix}"
   done
 }
 
