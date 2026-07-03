@@ -344,9 +344,15 @@ provided by external git repositories, cloned into a local cache under
 `$ARTENV_ROOT/templates/<repo>/`. Templates are addressed as
 `<repo>/<template>`.
 
+artenv ships with a default repository, [artemis-templates](https://github.com/yano404/artemis-templates),
+so `artenv templates update` followed by `artenv new <dir> -t default/standard`
+works out of the box.
+
 ### Configuring a template repository
 
-Describe each repository in its own file, `template-repos/<name>.toml`:
+Each repository is described in its own file, `template-repos/<name>.toml`
+(the bundled default is `template-repos/default.toml`). To add another
+repository, create a new file:
 
 ```toml
 [repo]
@@ -373,7 +379,7 @@ artenv templates repos
 artenv templates ls
 
 # Create a working directory from a template
-artenv new /path/to/work -t artemis-templates/standard
+artenv new /path/to/work -t default/standard
 
 # The repo prefix may be omitted when the name is unambiguous
 artenv new /path/to/work -t standard

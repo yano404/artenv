@@ -1,0 +1,4 @@
+[repo]
+url         = "https://github.com/yano404/artemis-templates.git"
+enabled     = true
+description = "Official Artemis analysis templates"
