@@ -163,7 +163,10 @@ binds        = ["/extra/path"]         # additional Apptainer bind paths (option
 - `archive-env [env]`          : Archive an environment (hidden from `ls`, still usable)
 - `unarchive-version [version]`: Unarchive a version
 - `unarchive-env [env]`        : Unarchive an environment
-- `new <dir>`                  : Create the working directory using the templates
+- `new <dir> [-t <template>]`  : Create the working directory from a template
+- `templates ls`               : List available templates (`<repo>/<template>`)
+- `templates repos`            : List configured template repositories
+- `templates update [repo...]` : Clone or update template repositories
 - `install [--native|--apptainer] [TAG]` : Install artemis (build from source or pull Apptainer image)
 - `install --update <version>`     : Re-pull the Apptainer image for an existing version
 - `doctor [env|--all]`         : Diagnose a registered environment

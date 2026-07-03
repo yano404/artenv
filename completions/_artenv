@@ -20,8 +20,12 @@ _artenv_list_versions() {
   done
 }
 
+_artenv_list_templates() {
+  command artenv templates ls 2>/dev/null
+}
+
 _artenv() {
-  local -a commands envs versions
+  local -a commands envs versions templates
 
   commands=("${(@f)$(_artenv_list_commands)}")
   envs=("${(@f)$(_artenv_list_envs)}")
@@ -48,6 +52,21 @@ _artenv() {
           *)
             ;;
         esac
+      fi
+      return 0
+      ;;
+    templates)
+      # `artenv templates <sub>`
+      if (( CURRENT == 3 )); then
+        compadd -- ls repos update -h
+      fi
+      return 0
+      ;;
+    new)
+      # complete template names right after -t/--template
+      if [[ "${words[CURRENT-1]}" == "-t" || "${words[CURRENT-1]}" == "--template" ]]; then
+        templates=("${(@f)$(_artenv_list_templates)}")
+        compadd -- "${templates[@]}"
       fi
       return 0
       ;;

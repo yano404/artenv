@@ -23,9 +23,14 @@ _artenv_list_versions() {
   done
 }
 
+_artenv_list_templates() {
+  command artenv templates ls 2>/dev/null
+}
+
 _artenv_completion() {
-  local cur cmd
+  local cur prev cmd
   cur="${COMP_WORDS[COMP_CWORD]}"
+  prev="${COMP_WORDS[COMP_CWORD-1]:-}"
   cmd="${COMP_WORDS[1]:-}"
 
   if [[ ${COMP_CWORD} -eq 1 ]]; then
@@ -50,6 +55,24 @@ _artenv_completion() {
             COMPREPLY=()
             ;;
         esac
+      fi
+      return 0
+      ;;
+    templates)
+      # `artenv templates <sub>`
+      if [[ ${COMP_CWORD} -eq 2 ]]; then
+        COMPREPLY=( $(compgen -W "ls repos update -h" -- "${cur}") )
+      else
+        COMPREPLY=()
+      fi
+      return 0
+      ;;
+    new)
+      # complete template names right after -t/--template
+      if [[ "${prev}" == "-t" || "${prev}" == "--template" ]]; then
+        COMPREPLY=( $(compgen -W "$(_artenv_list_templates)" -- "${cur}") )
+      else
+        COMPREPLY=()
       fi
       return 0
       ;;
