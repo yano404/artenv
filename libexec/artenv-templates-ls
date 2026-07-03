@@ -30,7 +30,13 @@ main() {
     esac
   done
 
-  list_templates
+  local out
+  out="$(list_templates)"
+  if [[ -n "${out}" ]]; then
+    printf '%s\n' "${out}"
+  else
+    templates_update_hint
+  fi
 }
 
 main "$@"

@@ -90,6 +90,19 @@ Enter the path to git repos (required)> /path/to/git_repos or URL of git repos
 <env-name> was registered
 ```
 
+### 4. Fetch project templates
+
+Fetch the template repositories once so that `artenv new` can scaffold from
+them:
+
+```sh
+artenv templates update
+```
+
+This clones the configured repositories (the bundled default is
+[artemis-templates](https://github.com/yano404/artemis-templates)) into a
+local cache. Re-run it whenever you want to update. See [Templates](#templates).
+
 ## Shell Completions
 
 `artenv` provides shell completion for both bash and zsh.
