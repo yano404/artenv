@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+# shellcheck disable=SC2154  # status/output are set by run()/run_in() in lib.sh
 # Tests for: artenv version group dispatcher (v2.1 phase 1)
 
 # bare `artenv version` prints the current version (ART_VERSION), exit 1 if unset

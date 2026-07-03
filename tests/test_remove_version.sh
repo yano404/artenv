@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+# shellcheck disable=SC2154  # status/output are set by run()/run_in() in lib.sh
 # Tests for: artenv remove-version
 
 test_rmv_basic_native() {

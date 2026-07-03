@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+# shellcheck disable=SC2154  # status/output are set by run()/run_in() in lib.sh
 # Tests for: `artenv commands` reflects the v2.1 grouping.
 # The `version` group is a top-level command; its sub-actions (artenv-version-*)
 # are NOT top-level commands. Old names remain (as shims) for compatibility.

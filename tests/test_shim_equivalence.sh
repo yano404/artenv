@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+# shellcheck disable=SC2154  # status/output are set by run()/run_in() in lib.sh
 # Tests for: old command names are pure exec shims to their canonical targets.
 # Because each shim is a bare `exec`, the old and new forms must produce
 # byte-for-byte identical stdout/stderr and the same exit status.

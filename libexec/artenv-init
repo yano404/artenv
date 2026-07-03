@@ -17,6 +17,7 @@ function main() {
         local env
         env="$(< "${ARTENV_ROOT}/env")"
         if [[ -n "${env}" ]]; then
+            # shellcheck source=/dev/null
             source artenv-sh-shell "${env}"
         fi
     fi

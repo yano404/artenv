@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+# shellcheck disable=SC2154  # status/output are set by run()/run_in() in lib.sh
 # Tests for: artenv archive-version / archive-env / unarchive-version / unarchive-env
 # and the archived-aware behaviour of ls / versions / register-env.
 
