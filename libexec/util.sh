@@ -50,7 +50,19 @@ toml_get() {
   local section="$2"
   local key="$3"
   local default="${4:-}"
-  yq -p toml -oy -r ".${section}.${key} // \"${default}\"" "${file}"
+  # Distinguish an explicit value (including the boolean `false') from a
+  # missing key. yq/jq's `//' fallback treats `false'/`null' as absent, which
+  # would collapse `key = false' to the default. Branch on presence instead:
+  # emit "<present>\n<value>" in one call, then pick value or default.
+  local out present value
+  out="$(yq -p toml -oy -r "((.${section} // {}) | has(\"${key}\")), (.${section}.${key})" "${file}")"
+  present="${out%%$'\n'*}"
+  value="${out#*$'\n'}"
+  if [[ "${present}" == "true" ]]; then
+    printf '%s\n' "${value}"
+  else
+    printf '%s\n' "${default}"
+  fi
 }
 
 set_archived_flag() {
@@ -104,15 +116,13 @@ list_template_repos() {
   done | sort
 }
 
-# Print "true" or "false" for a repo's enabled flag (default true).
-# Note: toml_get cannot be used here because its `//' fallback treats the
-# boolean `false' like a missing key, collapsing `enabled = false' to true.
+# Print "true" or "false" for a repo's enabled flag (default true; only an
+# explicit `enabled = false' disables). toml_get now preserves boolean false,
+# so it reads the flag correctly.
 template_repo_enabled_flag() {
   local conf="${ARTENV_ROOT}/template-repos/$1.toml"
   local val="true"
-  if [[ -f "${conf}" ]]; then
-    val="$(yq -p toml -oy -r '.repo.enabled' "${conf}")"
-  fi
+  [[ -f "${conf}" ]] && val="$(toml_get "${conf}" repo enabled true)"
   if [[ "${val}" == "false" ]]; then
     printf 'false\n'
   else
