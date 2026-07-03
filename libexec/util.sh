@@ -162,6 +162,26 @@ list_templates() {
   done | sort
 }
 
+# Print a one-line hint to stderr when at least one enabled template repo has
+# not been fetched yet, so `artenv templates update' would populate the cache.
+templates_update_hint() {
+  local name
+  while IFS= read -r name; do
+    template_repo_enabled "${name}" || continue
+    [[ -d "${ARTENV_ROOT}/templates/${name}" ]] && continue
+    printf "artenv: no templates cached; run 'artenv templates update' to fetch them\n" >&2
+    return 0
+  done < <(list_template_repos)
+  return 0
+}
+
+# Report a missing template, adding the update hint when it may help.
+die_template_not_found() {
+  printf 'artenv: template not found: %s\n' "$1" >&2
+  templates_update_hint
+  exit 1
+}
+
 # Resolve "[<repo>/]<name>" to an absolute template directory. On success sets
 # the RESOLVED_TEMPLATE_PATH global and returns 0; otherwise dies.
 # shellcheck disable=SC2034  # RESOLVED_TEMPLATE_PATH is consumed by the caller
@@ -175,7 +195,7 @@ resolve_template() {
     validate_template_component "${repo}"
     validate_template_component "${name}"
     local path="${base}/${repo}/${name}"
-    [[ -d "${path}" ]] || die "template not found: ${spec}"
+    [[ -d "${path}" ]] || die_template_not_found "${spec}"
     RESOLVED_TEMPLATE_PATH="${path}"
     return 0
   fi
@@ -188,7 +208,7 @@ resolve_template() {
   done < <(list_templates)
 
   case "${#matches[@]}" in
-    0) die "template not found: ${spec}" ;;
+    0) die_template_not_found "${spec}" ;;
     1) RESOLVED_TEMPLATE_PATH="${base}/${matches[0]}"; return 0 ;;
     *)
       { printf 'artenv: ambiguous template: %s\n' "${spec}"

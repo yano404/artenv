@@ -334,3 +334,40 @@ test_new_no_template_non_tty_dies() {
   assert_contains "${output}" "not a tty"
   _templates_cleanup
 }
+
+# --- cold-start hint (repo configured but not yet fetched) ------------------
+
+test_templates_ls_cold_start_hint() {
+  TEMPLATE_REPOS=()
+  local repo; repo="$(make_template_repo alpha)"
+  write_repo_conf myrepo "${repo}"           # configured, but no `templates update'
+  run templates ls
+  assert_status "${status}" 0
+  assert_contains "${output}" "artenv templates update"
+  _templates_cleanup
+}
+
+test_new_cold_start_hint() {
+  TEMPLATE_REPOS=()
+  local repo; repo="$(make_template_repo alpha)"
+  write_repo_conf myrepo "${repo}"
+  run new "${ARTENV_ROOT}/work" -t myrepo/alpha
+  assert_status "${status}" 1
+  assert_contains "${output}" "template not found"
+  assert_contains "${output}" "artenv templates update"
+  _templates_cleanup
+}
+
+test_new_missing_after_update_no_hint() {
+  TEMPLATE_REPOS=()
+  local repo; repo="$(make_template_repo alpha)"
+  write_repo_conf myrepo "${repo}"
+  run templates update
+  assert_status "${status}" 0
+  # myrepo is now cached; a genuinely missing template must not suggest update.
+  run new "${ARTENV_ROOT}/work" -t myrepo/nope
+  assert_status "${status}" 1
+  assert_contains "${output}" "template not found"
+  assert_not_contains "${output}" "artenv templates update"
+  _templates_cleanup
+}
