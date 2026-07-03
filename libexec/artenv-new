@@ -2,33 +2,87 @@
 
 set -euo pipefail
 
-if [ $# != 1 ]; then
-    echo "artenv new <dir>"
-    exit 1
-fi
+script_dir="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
+# shellcheck source=/dev/null
+source "${script_dir}/util.sh"
 
-dir="$(realpath "$1")"
+usage() {
+  cat <<'EOS'
+usage: artenv new <dir> [-t|--template [<repo>/]<name>]
 
-if [ ! -d "${dir}" ]; then
-    mkdir -p "${dir}"
-fi
+Create a new working directory from a template.
 
-if [[ -n "$(ls -A "${dir}")" ]]; then
-   echo "${dir} is not empty!"
-   exit 1
-fi
+The template may be qualified (<repo>/<name>) or unqualified (<name>). An
+unqualified name is searched across all cached repositories and local/; it is
+an error if it matches more than one template. With no -t and a tty, choose
+interactively.
 
-templates_dir="${ARTENV_ROOT}/templates"
-templates_dir_entries=("$templates_dir"/*)
-echo "Select the templates"
-select template in "${templates_dir_entries[@]##*/}"; do
-    if [[ -n "${template:-}" ]]; then
-        break;
-    else
+Options:
+  -t, --template [<repo>/]<name>   Template to use
+  -h, --help                       Show this help
+EOS
+}
+
+main() {
+  [[ -n "${ARTENV_ROOT:-}" ]] || die "ARTENV_ROOT is not set"
+  require_yq
+
+  local dir="" template_spec="" have_template=0
+  while [[ $# -gt 0 ]]; do
+    case "$1" in
+      -h|--help) usage; exit 0 ;;
+      -t|--template)
+        [[ $# -ge 2 ]] || die "option $1 requires an argument"
+        template_spec="$2"; have_template=1; shift 2 ;;
+      --template=*)
+        template_spec="${1#*=}"; have_template=1; shift ;;
+      -*) die "unknown option: $1" ;;
+      *)
+        [[ -z "${dir}" ]] || die "usage: artenv new <dir> [-t <template>]"
+        dir="$1"; shift ;;
+    esac
+  done
+
+  [[ -n "${dir}" ]] || { usage >&2; exit 1; }
+
+  local templates_root="${ARTENV_ROOT}/templates"
+  local template_path=""
+
+  if [[ "${have_template}" -eq 1 ]]; then
+    resolve_template "${template_spec}"
+    template_path="${RESOLVED_TEMPLATE_PATH}"
+  elif [[ -t 0 && -t 1 ]]; then
+    local -a choices=()
+    mapfile -t choices < <(list_templates)
+    [[ ${#choices[@]} -gt 0 ]] || die "no templates available (run \`artenv templates update')"
+    echo "Select the template"
+    local choice=""
+    select choice in "${choices[@]}"; do
+      if [[ -n "${choice:-}" ]]; then
+        break
+      else
         echo "Wrong selection"
-    fi
-done
+      fi
+    done
+    template_path="${templates_root}/${choice}"
+  else
+    die "no template specified and not a tty; use -t <template>"
+  fi
 
-template="${templates_dir}/${template}"
-cp -rT -- "${template}" "${dir}"
+  local target
+  target="$(resolve_path "${dir}")"
 
+  if [[ ! -d "${target}" ]]; then
+    ensure_dir "${target}"
+  fi
+  if [[ -n "$(ls -A "${target}" 2>/dev/null)" ]]; then
+    die "${target} is not empty"
+  fi
+
+  cp -rT -- "${template_path}" "${target}"
+
+  local rel="${template_path#"${templates_root}/"}"
+  printf 'created %s from template %s\n' "${target}" "${rel}"
+}
+
+main "$@"

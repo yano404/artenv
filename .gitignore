@@ -1,4 +1,6 @@
 /versions
 /envs
 /env
+/templates
+/template-repos
 /.claude

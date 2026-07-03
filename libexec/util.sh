@@ -75,6 +75,121 @@ set_archived_flag() {
   mv -- "${tmp}" "${conf}"
 }
 
+# --- templates -------------------------------------------------------------
+# Templates live under ${ARTENV_ROOT}/templates/<namespace>/<template>/, where
+# <namespace> is either a template repo (cloned from template-repos/<name>.toml)
+# or the reserved name `local' for user-managed templates. `local' is never
+# cloned, updated, or removed by artenv.
+
+# Reject template path components that could escape the templates tree.
+validate_template_component() {
+  local comp="$1"
+  [[ -n "${comp}" ]]                              || die "invalid template name: (empty)"
+  [[ "${comp}" != *"/"* ]]                        || die "invalid template name: ${comp}"
+  [[ "${comp}" != "." && "${comp}" != ".." ]]     || die "invalid template name: ${comp}"
+  return 0
+}
+
+# Print configured template repo names (one per line, sorted).
+list_template_repos() {
+  local repos_dir="${ARTENV_ROOT}/template-repos"
+  [[ -d "${repos_dir}" ]] || return 0
+  local -a files=()
+  shopt -s nullglob
+  files=("${repos_dir}"/*.toml)
+  shopt -u nullglob
+  local f
+  for f in "${files[@]}"; do
+    basename "${f}" .toml
+  done | sort
+}
+
+# Print "true" or "false" for a repo's enabled flag (default true).
+# Note: toml_get cannot be used here because its `//' fallback treats the
+# boolean `false' like a missing key, collapsing `enabled = false' to true.
+template_repo_enabled_flag() {
+  local conf="${ARTENV_ROOT}/template-repos/$1.toml"
+  local val="true"
+  if [[ -f "${conf}" ]]; then
+    val="$(yq -p toml -oy -r '.repo.enabled' "${conf}")"
+  fi
+  if [[ "${val}" == "false" ]]; then
+    printf 'false\n'
+  else
+    printf 'true\n'
+  fi
+}
+
+# Return 0 if the repo is enabled (default) or has no config; 1 if disabled.
+template_repo_enabled() {
+  [[ "$(template_repo_enabled_flag "$1")" == "true" ]]
+}
+
+# Print usable templates as "<namespace>/<template>", sorted. Includes local/*
+# unconditionally and <repo>/* for enabled repos only.
+list_templates() {
+  local base="${ARTENV_ROOT}/templates"
+  [[ -d "${base}" ]] || return 0
+  local -a ns_dirs=()
+  shopt -s nullglob
+  ns_dirs=("${base}"/*/)
+  shopt -u nullglob
+
+  local ns_path ns tmpl_path tmpl
+  for ns_path in "${ns_dirs[@]}"; do
+    ns="$(basename "${ns_path}")"
+    if [[ "${ns}" != "local" ]]; then
+      template_repo_enabled "${ns}" || continue
+    fi
+    local -a tmpls=()
+    shopt -s nullglob
+    tmpls=("${ns_path}"*/)
+    shopt -u nullglob
+    for tmpl_path in "${tmpls[@]}"; do
+      tmpl="$(basename "${tmpl_path}")"
+      printf '%s/%s\n' "${ns}" "${tmpl}"
+    done
+  done | sort
+}
+
+# Resolve "[<repo>/]<name>" to an absolute template directory. On success sets
+# the RESOLVED_TEMPLATE_PATH global and returns 0; otherwise dies.
+# shellcheck disable=SC2034  # RESOLVED_TEMPLATE_PATH is consumed by the caller
+resolve_template() {
+  local spec="$1"
+  local base="${ARTENV_ROOT}/templates"
+
+  if [[ "${spec}" == */* ]]; then
+    local repo="${spec%%/*}"
+    local name="${spec#*/}"
+    validate_template_component "${repo}"
+    validate_template_component "${name}"
+    local path="${base}/${repo}/${name}"
+    [[ -d "${path}" ]] || die "template not found: ${spec}"
+    RESOLVED_TEMPLATE_PATH="${path}"
+    return 0
+  fi
+
+  validate_template_component "${spec}"
+  local -a matches=()
+  local t
+  while IFS= read -r t; do
+    [[ "${t##*/}" == "${spec}" ]] && matches+=("${t}")
+  done < <(list_templates)
+
+  case "${#matches[@]}" in
+    0) die "template not found: ${spec}" ;;
+    1) RESOLVED_TEMPLATE_PATH="${base}/${matches[0]}"; return 0 ;;
+    *)
+      { printf 'artenv: ambiguous template: %s\n' "${spec}"
+        printf 'candidates:\n'
+        printf '  %s\n' "${matches[@]}"
+      } >&2
+      exit 1
+      ;;
+  esac
+}
+
 remove_path() {
   local path_list="${1-}"
   local target="${2-}"

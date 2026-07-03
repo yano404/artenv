@@ -1,0 +1,45 @@
+#!/usr/bin/env bash
+
+set -euo pipefail
+
+script_dir="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
+# shellcheck source=/dev/null
+source "${script_dir}/util.sh"
+
+templates_group_usage() {
+  cat <<'EOS'
+usage: artenv templates <subcommand> [args]
+
+Manage project templates provided by external git repositories.
+
+Subcommands:
+  ls          List available templates as <repo>/<template>
+  repos       List configured template repositories
+  update      Clone or update template repositories
+
+Options:
+  -h, --help  Show this help
+EOS
+}
+
+main() {
+  local action="${1:-}"
+  case "${action}" in
+    ""|-h|--help|help)
+      templates_group_usage
+      exit 0
+      ;;
+    -*)
+      die "unknown option: ${action}"
+      ;;
+    *)
+      local target
+      target="$(command -v "artenv-templates-${action}" || true)"
+      [[ -n "${target}" ]] || die "no such templates subcommand: \`${action}'"
+      shift
+      exec "${target}" "$@"
+      ;;
+  esac
+}
+
+main "$@"
