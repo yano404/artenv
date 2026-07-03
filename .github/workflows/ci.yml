@@ -35,11 +35,8 @@ jobs:
         run: ./tests/run.sh
 
   shellcheck:
-    name: shellcheck (advisory)
+    name: shellcheck
     runs-on: ubuntu-latest
-    # Advisory for now: surface findings without blocking. Tighten to a hard
-    # gate once the existing scripts are clean.
-    continue-on-error: true
     steps:
       - uses: actions/checkout@v4
 

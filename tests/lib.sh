@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+# shellcheck disable=SC2034  # output/status are globals consumed by the sourcing test files
 # Test helpers for artenv (plain bash, no external framework required).
 # Every test runs against an isolated ARTENV_ROOT sandbox; the real
 # ~/.artenv is never touched.

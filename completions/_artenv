@@ -33,15 +33,33 @@ _artenv() {
   fi
 
   case "${words[2]}" in
-    register-env|register-version)
+    version)
+      # `artenv version <sub> [target]`
+      if (( CURRENT == 3 )); then
+        compadd -- ls register remove archive unarchive install current -h
+      else
+        case "${words[3]}" in
+          remove|archive|unarchive)
+            compadd -- "${versions[@]}"
+            ;;
+          install)
+            compadd -- --native --apptainer --update --list -l --help -h
+            ;;
+          *)
+            ;;
+        esac
+      fi
+      return 0
+      ;;
+    register|register-env|register-version)
       # register takes a new (not-yet-existing) name; offer no completion
       return 0
       ;;
-    *-env|shell|default|info)
+    remove|archive|unarchive|remove-env|archive-env|unarchive-env|shell|default|info)
       compadd -- "${envs[@]}"
       return 0
       ;;
-    *-version)
+    remove-version|archive-version|unarchive-version)
       compadd -- "${versions[@]}"
       return 0
       ;;
