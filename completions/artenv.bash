@@ -90,7 +90,7 @@ _artenv_completion() {
       return 0
       ;;
     doctor)
-      COMPREPLY=( $(compgen -W "--all $(_artenv_list_envs)" -- "${cur}") )
+      COMPREPLY=( $(compgen -W "--all --orphans $(_artenv_list_envs)" -- "${cur}") )
       return 0
       ;;
     install)

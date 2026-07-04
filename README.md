@@ -165,7 +165,7 @@ Template commands live under the `templates` group (see [Templates](#templates))
 Utility commands:
 
 - `init`                       : Configure the shell environment for artenv
-- `doctor [env|--all|--hygiene]` : Diagnose environments / scan store health
+- `doctor [env|--all|--orphans]` : Diagnose environments / scan store health
 - `migrate`                    : Migrate v1 (symlink) data to v2 (TOML)
 - `commands`                   : List all available commands
 - `--version`                  : Show the version of artenv
@@ -347,10 +347,10 @@ e545 was unarchived
 artenv doctor           # checks the current environment
 artenv doctor <env>     # checks the specified environment
 artenv doctor --all     # checks all registered environments
-artenv doctor --hygiene # store-wide scan for orphaned resources
+artenv doctor --orphans # store-wide scan for orphaned resources
 ```
 
-`--hygiene` performs a store-wide scan and reports leftovers that `remove` /
+`--orphans` performs a store-wide scan and reports leftovers that `remove` /
 `archive` can leave behind: unreferenced `.sif` images under `images/`,
 environments pointing at a version that no longer exists, and orphaned
 `*.artlogin.sh` files (no matching env, or `use_artlogin = false`). It exits
@@ -493,6 +493,25 @@ version = "artemis-apptainer"
 work = "/path/to/work"
 binds = ["/extra/path1", "/extra/path2"]
 ```
+
+## Versioning
+
+artenv's **major** version tracks broad themes rather than strict per-flag
+[SemVer](https://semver.org/): a change that stays within the current major's
+theme ships as a minor/patch release, even if it is technically a breaking
+change to the command surface. As an end-user CLI (not a library consumed by a
+dependency resolver), the changelog is the source of truth for what changed —
+so always read [CHANGELOG.md](CHANGELOG.md), not just the major number, when
+upgrading.
+
+**v2** covers three themes:
+
+1. Configuration migrated from symlinks to TOML (`versions/*.toml`, `envs/*.toml`).
+2. Apptainer support and the resource-grouped command taxonomy (`version` /
+   `templates` groups, implicit env commands, deprecated aliases).
+3. Templates managed via external git repositories.
+
+The next major (**v3**) is reserved for the next thematic shift beyond these.
 
 ## Changelog
 

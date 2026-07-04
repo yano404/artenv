@@ -136,12 +136,12 @@ doctor_current() {
   doctor_env "${ART_PROJECT}"
 }
 
-# Store-wide hygiene scan: surfaces orphaned resources left behind by
+# Store-wide orphan scan: surfaces orphaned resources left behind by
 # remove/archive operations. Reports only problems; a clean store prints
 # "[OK] none" per section. Returns non-zero if any issue is found.
-doctor_hygiene() {
+doctor_orphans() {
   local issues=0
-  printf 'hygiene: store-wide checks\n\n'
+  printf 'orphan scan: store-wide checks\n\n'
 
   # 1. Orphan SIF images: *.sif under images/ not referenced by any version.
   printf 'orphan images (unreferenced .sif under images/):\n'
@@ -261,7 +261,7 @@ doctor_all() {
 
 usage() {
   cat <<'EOS'
-usage: artenv doctor [env|--all|--hygiene]
+usage: artenv doctor [env|--all|--orphans]
 
 Diagnose environments and store health.
 
@@ -270,7 +270,7 @@ With no argument, checks the currently active environment ($ART_PROJECT).
 Modes:
   <env>        Check a single registered environment
   --all        Check every registered environment
-  --hygiene    Store-wide scan for orphaned resources left by remove/archive
+  --orphans    Store-wide scan for orphaned resources left by remove/archive
                (unreferenced .sif images, dangling env->version references,
                orphan *.artlogin.sh)
 
@@ -282,7 +282,7 @@ EOS
 main() {
   [[ -n "${ARTENV_ROOT:-}" ]] || die "ARTENV_ROOT is not set"
   require_yq
-  [[ $# -le 1 ]] || die "usage: artenv doctor [env|--all|--hygiene]"
+  [[ $# -le 1 ]] || die "usage: artenv doctor [env|--all|--orphans]"
 
   if [[ $# -eq 0 ]]; then
     doctor_current
@@ -293,11 +293,14 @@ main() {
     -h|--help)
       usage
       ;;
-    --hygiene)
-      doctor_hygiene
+    --orphans)
+      doctor_orphans
       ;;
     --all)
       doctor_all
+      ;;
+    -*)
+      die "unknown option: $1"
       ;;
     *)
       doctor_env "$1"
