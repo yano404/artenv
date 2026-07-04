@@ -492,6 +492,10 @@ work = "/path/to/work"
 binds = ["/extra/path1", "/extra/path2"]
 ```
 
+## Changelog
+
+See [CHANGELOG.md](CHANGELOG.md) for the release history.
+
 ## License
 Copyright (c) 2026 Takayuki YANO
 
