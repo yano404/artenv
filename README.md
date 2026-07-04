@@ -377,9 +377,11 @@ works out of the box.
 
 ### Configuring a template repository
 
-Each repository is described in its own file, `template-repos/<name>.toml`
-(the bundled default is `template-repos/default.toml`). To add another
-repository, create a new file:
+Each repository is described in its own file, `template-repos/<name>.toml`.
+The bundled default, `template-repos/default.toml`, is created automatically
+on first run (seeded from `share/template-repos/default.toml`). This runtime
+file is gitignored and yours to edit freely — changes are never overwritten by
+`git pull` upgrades. To add another repository, create a new file:
 
 ```toml
 [repo]
@@ -421,7 +423,9 @@ Templates placed under `$ARTENV_ROOT/templates/local/` are available as
 fetched, updated, or removed by artenv.
 
 > `templates/` (clone caches and `local/`) and `template-repos/` are per-user
-> runtime data and are gitignored.
+> runtime data and are gitignored. `template-repos/default.toml` is seeded on
+> first run from the bundled `share/template-repos/default.toml`, so editing it
+> never dirties the working tree or conflicts on upgrade.
 
 ## Configuration Files
 

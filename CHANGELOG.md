@@ -6,6 +6,30 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 Major versions track broad themes rather than strict per-flag SemVer — see
 [Versioning](README.md#versioning).
 
+## [2.2.1] - 2026-07-04
+
+### Fixed
+
+- `template-repos/default.toml` is no longer tracked by git. It was the only
+  tracked file under the otherwise-ignored runtime tree, so editing it (the
+  documented way to configure the default template repo) dirtied the working
+  tree and caused a `git pull` conflict on upgrade. The bundled copy now lives
+  at `share/template-repos/default.toml` and is copied into
+  `template-repos/default.toml` on first run; the runtime file is gitignored
+  and freely editable. As a side effect, editing template config no longer
+  makes `artenv --version` report `-dirty`.
+
+  Upgrade note: if you previously customized `template-repos/default.toml`,
+  `git pull` will refuse ("local changes would be overwritten"). Preserve your
+  edits with:
+      mv template-repos/default.toml /tmp/mydefault
+      git checkout -- template-repos/default.toml
+      git pull
+      mv /tmp/mydefault template-repos/default.toml
+  Users with additional custom repo confs keep their `template-repos/` dir after
+  the pull; re-add the default if wanted with
+  `cp share/template-repos/default.toml template-repos/`.
+
 ## [2.2.0] - 2026-07-04
 
 ### Added
@@ -104,6 +128,7 @@ compatible: every old command name still works as a deprecated alias.
 
 - Initial release (symlink-based version/environment management).
 
+[2.2.1]: https://github.com/yano404/artenv/compare/v2.2.0...v2.2.1
 [2.2.0]: https://github.com/yano404/artenv/compare/v2.1.0...v2.2.0
 [2.1.0]: https://github.com/yano404/artenv/compare/v2.0.0...v2.1.0
 [2.0.0]: https://github.com/yano404/artenv/compare/v1.0.0...v2.0.0
