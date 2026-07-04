@@ -31,6 +31,16 @@ function main() {
     [[ -d "${ARTENV_ROOT}/versions" ]] || mkdir -p -- "${ARTENV_ROOT}/versions"
     [[ -d "${ARTENV_ROOT}/envs"     ]] || mkdir -p -- "${ARTENV_ROOT}/envs"
 
+    # Best-effort first-run seed of the default template repo. Must never abort
+    # init and never write to stdout (stdout is eval'd by the shell function).
+    if [[ ! -d "${ARTENV_ROOT}/template-repos" \
+          && -f "${ARTENV_ROOT}/share/template-repos/default.toml" ]]; then
+      if mkdir -p -- "${ARTENV_ROOT}/template-repos" 2>/dev/null; then
+        cp -- "${ARTENV_ROOT}/share/template-repos/default.toml" \
+              "${ARTENV_ROOT}/template-repos/default.toml" 2>/dev/null || true
+      fi
+    fi
+
     if [[ -f "${ARTENV_ROOT}/env" ]]; then
         local env
         env="$(< "${ARTENV_ROOT}/env")"
