@@ -102,6 +102,21 @@ validate_template_component() {
   return 0
 }
 
+# Seed the bundled default template repo on first use. Best-effort and
+# zombie-free: only acts when the template-repos dir is ABSENT, so a user who
+# deletes default.toml (leaving other repo confs) keeps it deleted. The tracked
+# seed lives under share/; a missing seed (sandbox / non-repo install) is a
+# clean no-op. Never returns non-zero (callers run under `set -e`).
+ensure_default_repo() {
+  local repos_dir="${ARTENV_ROOT}/template-repos"
+  local seed="${ARTENV_ROOT}/share/template-repos/default.toml"
+  [[ -d "${repos_dir}" ]] && return 0     # user territory — never touch
+  [[ -f "${seed}" ]]      || return 0     # no seed present — no-op
+  mkdir -p -- "${repos_dir}" 2>/dev/null || return 0
+  cp -- "${seed}" "${repos_dir}/default.toml" 2>/dev/null || return 0
+  return 0
+}
+
 # Print configured template repo names (one per line, sorted).
 list_template_repos() {
   local repos_dir="${ARTENV_ROOT}/template-repos"
