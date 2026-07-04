@@ -6,13 +6,35 @@ script_dir="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 # shellcheck source=/dev/null
 source "${script_dir}/util.sh"
 
+usage() {
+  cat <<'EOS'
+usage: artenv register <env>
+
+Register a new environment interactively.
+
+Options:
+  -h, --help    Show this help
+EOS
+}
+
 main() {
+  local env_name=""
+  while [[ $# -gt 0 ]]; do
+    case "$1" in
+      -h|--help) usage; exit 0 ;;
+      -*)        die "unknown option: $1" ;;
+      *)
+        [[ -z "${env_name}" ]] || die "usage: artenv register <env>"
+        env_name="$1"; shift
+        ;;
+    esac
+  done
+
   [[ -n "${ARTENV_ROOT:-}" ]] || die "ARTENV_ROOT is not set"
-  [[ $# -eq 1 ]] || die "usage: artenv register <env>"
+  [[ -n "${env_name}" ]] || die "usage: artenv register <env>"
 
   require_yq
 
-  local env_name="$1"
   local env_conf="${ARTENV_ROOT}/envs/${env_name}.toml"
   local versions_dir="${ARTENV_ROOT}/versions"
   local template_artlogin="${ARTENV_ROOT}/libexec/artlogin.sh"

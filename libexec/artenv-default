@@ -5,19 +5,41 @@ script_dir="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 # shellcheck source=/dev/null
 source "${script_dir}/util.sh"
 
+usage() {
+  cat <<'EOS'
+usage: artenv default [env]
+
+With no argument, print the default env; otherwise set it.
+
+Options:
+  -h, --help    Show this help
+EOS
+}
+
 main() {
+  local env=""
+  local have_env=0
+  while [[ $# -gt 0 ]]; do
+    case "$1" in
+      -h|--help) usage; exit 0 ;;
+      -*)        die "unknown option: $1" ;;
+      *)
+        [[ "${have_env}" -eq 0 ]] || die "usage: artenv default [env]"
+        env="$1"; have_env=1; shift
+        ;;
+    esac
+  done
+
   [[ -n "${ARTENV_ROOT:-}" ]] || die "ARTENV_ROOT is not set"
-  [[ $# -le 1 ]] || die "usage: artenv default [env]"
 
   local target="${ARTENV_ROOT}/env"
 
-  if [[ $# -eq 0 ]]; then
+  if [[ "${have_env}" -eq 0 ]]; then
     [[ -f "${target}" ]] || die "default environment is not set"
     cat -- "${target}"
     exit 0
   fi
 
-  local env="$1"
   local env_conf="${ARTENV_ROOT}/envs/${env}.toml"
 
   [[ -n "${env}" ]] || die "environment name is empty"
