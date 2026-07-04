@@ -40,10 +40,10 @@ _artenv() {
     version)
       # `artenv version <sub> [target]`
       if (( CURRENT == 3 )); then
-        compadd -- ls register remove archive unarchive install current -h
+        compadd -- ls register remove archive unarchive info install current -h
       else
         case "${words[3]}" in
-          remove|archive|unarchive)
+          remove|archive|unarchive|info)
             compadd -- "${versions[@]}"
             ;;
           install)

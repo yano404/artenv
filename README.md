@@ -149,6 +149,7 @@ Version commands live under the `version` group:
 - `version remove [version]`   : Remove a registered artemis version
 - `version archive [version]`  : Archive a version (hidden from `version ls`, still usable)
 - `version unarchive [version]`: Unarchive a version
+- `version info [version]`     : Show the configuration of a version (defaults to the current one)
 - `version install [--native|--apptainer] [TAG]` : Install artemis (build from source or pull an Apptainer image)
 - `version install --update <version>` : Re-pull the Apptainer image for an existing version
 - `version help`               : Show the version group help
