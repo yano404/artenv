@@ -2,7 +2,25 @@
 
 set -euo pipefail
 
+function usage() {
+    cat << 'EOS'
+# Load artenv automatically by appending the following to your
+# shell's startup file (~/.bashrc or ~/.zshrc):
+
+export ARTENV_ROOT="$HOME/.artenv"
+export PATH="$ARTENV_ROOT/bin:$PATH"
+eval "$(artenv init -)"
+
+# Restart your shell for the changes to take effect.
+EOS
+}
+
 function main() {
+    if [[ "${1:-}" == "-h" || "${1:-}" == "--help" ]]; then
+        usage
+        exit 0
+    fi
+
     if [[ -z "${ARTENV_ROOT:-}" ]]; then
         # shellcheck disable=SC2016
         echo 'export ARTENV_ROOT="$HOME/.artenv"'
@@ -17,6 +35,7 @@ function main() {
         local env
         env="$(< "${ARTENV_ROOT}/env")"
         if [[ -n "${env}" ]]; then
+            # shellcheck source=/dev/null
             source artenv-sh-shell "${env}"
         fi
     fi
@@ -38,4 +57,4 @@ EOS
     exit 0
 }
 
-main
+main "$@"

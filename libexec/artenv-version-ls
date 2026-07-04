@@ -8,12 +8,12 @@ source "${script_dir}/util.sh"
 
 usage() {
   cat <<'EOS'
-usage: artenv ls [-a|--all]
+usage: artenv version ls [-a|--all]
 
-Print the environment list. Archived environments are hidden by default.
+Print the artemis versions. Archived versions are hidden by default.
 
 Options:
-  -a, --all     Include archived environments (marked "(archived)")
+  -a, --all     Include archived versions (marked "(archived)")
   -h, --help    Show this help
 EOS
 }
@@ -31,18 +31,18 @@ main() {
     esac
   done
 
-  local envs_dir="${ARTENV_ROOT}/envs"
-  local current_env="${ART_PROJECT:-}"
+  local versions_dir="${ARTENV_ROOT}/versions"
+  local current_version="${ART_VERSION:-}"
 
   local -a confs=()
   shopt -s nullglob
-  confs=("${envs_dir}"/*.toml)
+  confs=("${versions_dir}"/*.toml)
   shopt -u nullglob
 
-  local conf env_name archived marker suffix
+  local conf version_name archived marker suffix
   for conf in "${confs[@]}"; do
-    env_name="$(basename "${conf}" .toml)"
-    archived="$(toml_get "${conf}" env archived false)"
+    version_name="$(basename "${conf}" .toml)"
+    archived="$(toml_get "${conf}" version archived false)"
 
     if [[ "${archived}" == "true" ]]; then
       [[ "${show_all}" -eq 1 ]] || continue
@@ -51,13 +51,13 @@ main() {
       suffix=""
     fi
 
-    if [[ "${env_name}" == "${current_env}" ]]; then
+    if [[ "${version_name}" == "${current_version}" ]]; then
       marker='*'
     else
       marker=' '
     fi
 
-    printf '%s %s%s\n' "${marker}" "${env_name}" "${suffix}"
+    printf '%s %s%s\n' "${marker}" "${version_name}" "${suffix}"
   done
 }
 

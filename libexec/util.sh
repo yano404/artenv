@@ -50,7 +50,174 @@ toml_get() {
   local section="$2"
   local key="$3"
   local default="${4:-}"
-  yq -p toml -oy -r ".${section}.${key} // \"${default}\"" "${file}"
+  # Distinguish an explicit value (including the boolean `false') from a
+  # missing key. yq/jq's `//' fallback treats `false'/`null' as absent, which
+  # would collapse `key = false' to the default. Branch on presence instead:
+  # emit "<present>\n<value>" in one call, then pick value or default.
+  local out present value
+  out="$(yq -p toml -oy -r "((.${section} // {}) | has(\"${key}\")), (.${section}.${key})" "${file}")"
+  present="${out%%$'\n'*}"
+  value="${out#*$'\n'}"
+  if [[ "${present}" == "true" ]]; then
+    printf '%s\n' "${value}"
+  else
+    printf '%s\n' "${default}"
+  fi
+}
+
+set_archived_flag() {
+  # Set or clear the `archived` flag in a single-table TOML file.
+  # yq v4 cannot write TOML tables, so this is a text operation that
+  # preserves every other field (uri/digest/git_repos/binds/...).
+  local conf="$1"
+  local value="$2"
+  require_file "${conf}"
+
+  local dir tmp
+  dir="$(dirname -- "${conf}")"
+  tmp="$(mktemp "${dir}/.tmp.archived.XXXXXX")"
+
+  # Drop any existing archived line; the table header is always kept.
+  grep -v '^archived[[:space:]]*=' -- "${conf}" > "${tmp}" || true
+
+  if [[ "${value}" == "true" ]]; then
+    printf 'archived = true\n' >> "${tmp}"
+  fi
+
+  mv -- "${tmp}" "${conf}"
+}
+
+# --- templates -------------------------------------------------------------
+# Templates live under ${ARTENV_ROOT}/templates/<namespace>/<template>/, where
+# <namespace> is either a template repo (cloned from template-repos/<name>.toml)
+# or the reserved name `local' for user-managed templates. `local' is never
+# cloned, updated, or removed by artenv.
+
+# Reject template path components that could escape the templates tree.
+validate_template_component() {
+  local comp="$1"
+  [[ -n "${comp}" ]]                              || die "invalid template name: (empty)"
+  [[ "${comp}" != *"/"* ]]                        || die "invalid template name: ${comp}"
+  [[ "${comp}" != "." && "${comp}" != ".." ]]     || die "invalid template name: ${comp}"
+  return 0
+}
+
+# Print configured template repo names (one per line, sorted).
+list_template_repos() {
+  local repos_dir="${ARTENV_ROOT}/template-repos"
+  [[ -d "${repos_dir}" ]] || return 0
+  local -a files=()
+  shopt -s nullglob
+  files=("${repos_dir}"/*.toml)
+  shopt -u nullglob
+  local f
+  for f in "${files[@]}"; do
+    basename "${f}" .toml
+  done | sort
+}
+
+# Print "true" or "false" for a repo's enabled flag (default true; only an
+# explicit `enabled = false' disables). toml_get now preserves boolean false,
+# so it reads the flag correctly.
+template_repo_enabled_flag() {
+  local conf="${ARTENV_ROOT}/template-repos/$1.toml"
+  local val="true"
+  [[ -f "${conf}" ]] && val="$(toml_get "${conf}" repo enabled true)"
+  if [[ "${val}" == "false" ]]; then
+    printf 'false\n'
+  else
+    printf 'true\n'
+  fi
+}
+
+# Return 0 if the repo is enabled (default) or has no config; 1 if disabled.
+template_repo_enabled() {
+  [[ "$(template_repo_enabled_flag "$1")" == "true" ]]
+}
+
+# Print usable templates as "<namespace>/<template>", sorted. Includes local/*
+# unconditionally and <repo>/* for enabled repos only.
+list_templates() {
+  local base="${ARTENV_ROOT}/templates"
+  [[ -d "${base}" ]] || return 0
+  local -a ns_dirs=()
+  shopt -s nullglob
+  ns_dirs=("${base}"/*/)
+  shopt -u nullglob
+
+  local ns_path ns tmpl_path tmpl
+  for ns_path in "${ns_dirs[@]}"; do
+    ns="$(basename "${ns_path}")"
+    if [[ "${ns}" != "local" ]]; then
+      template_repo_enabled "${ns}" || continue
+    fi
+    local -a tmpls=()
+    shopt -s nullglob
+    tmpls=("${ns_path}"*/)
+    shopt -u nullglob
+    for tmpl_path in "${tmpls[@]}"; do
+      tmpl="$(basename "${tmpl_path}")"
+      printf '%s/%s\n' "${ns}" "${tmpl}"
+    done
+  done | sort
+}
+
+# Print a one-line hint to stderr when at least one enabled template repo has
+# not been fetched yet, so `artenv templates update' would populate the cache.
+templates_update_hint() {
+  local name
+  while IFS= read -r name; do
+    template_repo_enabled "${name}" || continue
+    [[ -d "${ARTENV_ROOT}/templates/${name}" ]] && continue
+    printf "artenv: no templates cached; run 'artenv templates update' to fetch them\n" >&2
+    return 0
+  done < <(list_template_repos)
+  return 0
+}
+
+# Report a missing template, adding the update hint when it may help.
+die_template_not_found() {
+  printf 'artenv: template not found: %s\n' "$1" >&2
+  templates_update_hint
+  exit 1
+}
+
+# Resolve "[<repo>/]<name>" to an absolute template directory. On success sets
+# the RESOLVED_TEMPLATE_PATH global and returns 0; otherwise dies.
+# shellcheck disable=SC2034  # RESOLVED_TEMPLATE_PATH is consumed by the caller
+resolve_template() {
+  local spec="$1"
+  local base="${ARTENV_ROOT}/templates"
+
+  if [[ "${spec}" == */* ]]; then
+    local repo="${spec%%/*}"
+    local name="${spec#*/}"
+    validate_template_component "${repo}"
+    validate_template_component "${name}"
+    local path="${base}/${repo}/${name}"
+    [[ -d "${path}" ]] || die_template_not_found "${spec}"
+    RESOLVED_TEMPLATE_PATH="${path}"
+    return 0
+  fi
+
+  validate_template_component "${spec}"
+  local -a matches=()
+  local t
+  while IFS= read -r t; do
+    [[ "${t##*/}" == "${spec}" ]] && matches+=("${t}")
+  done < <(list_templates)
+
+  case "${#matches[@]}" in
+    0) die_template_not_found "${spec}" ;;
+    1) RESOLVED_TEMPLATE_PATH="${base}/${matches[0]}"; return 0 ;;
+    *)
+      { printf 'artenv: ambiguous template: %s\n' "${spec}"
+        printf 'candidates:\n'
+        printf '  %s\n' "${matches[@]}"
+      } >&2
+      exit 1
+      ;;
+  esac
 }
 
 remove_path() {

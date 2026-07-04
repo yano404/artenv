@@ -20,8 +20,12 @@ _artenv_list_versions() {
   done
 }
 
+_artenv_list_templates() {
+  command artenv templates ls 2>/dev/null
+}
+
 _artenv() {
-  local -a commands envs versions
+  local -a commands envs versions templates
 
   commands=("${(@f)$(_artenv_list_commands)}")
   envs=("${(@f)$(_artenv_list_envs)}")
@@ -33,8 +37,49 @@ _artenv() {
   fi
 
   case "${words[2]}" in
-    shell|default|info)
+    version)
+      # `artenv version <sub> [target]`
+      if (( CURRENT == 3 )); then
+        compadd -- ls register remove archive unarchive info install current -h
+      else
+        case "${words[3]}" in
+          remove|archive|unarchive|info)
+            compadd -- "${versions[@]}"
+            ;;
+          install)
+            compadd -- --native --apptainer --update --list -l --help -h
+            ;;
+          *)
+            ;;
+        esac
+      fi
+      return 0
+      ;;
+    templates)
+      # `artenv templates <sub>`
+      if (( CURRENT == 3 )); then
+        compadd -- ls repos update -h
+      fi
+      return 0
+      ;;
+    new)
+      # complete template names right after -t/--template
+      if [[ "${words[CURRENT-1]}" == "-t" || "${words[CURRENT-1]}" == "--template" ]]; then
+        templates=("${(@f)$(_artenv_list_templates)}")
+        compadd -- "${templates[@]}"
+      fi
+      return 0
+      ;;
+    register|register-env|register-version)
+      # register takes a new (not-yet-existing) name; offer no completion
+      return 0
+      ;;
+    remove|archive|unarchive|remove-env|archive-env|unarchive-env|shell|default|info)
       compadd -- "${envs[@]}"
+      return 0
+      ;;
+    remove-version|archive-version|unarchive-version)
+      compadd -- "${versions[@]}"
       return 0
       ;;
     doctor)

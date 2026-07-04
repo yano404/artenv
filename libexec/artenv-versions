@@ -1,31 +1,5 @@
 #!/usr/bin/env bash
-
-set -euo pipefail
-
-script_dir="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
-# shellcheck source=/dev/null
-source "${script_dir}/util.sh"
-
-main() {
-  [[ -n "${ARTENV_ROOT:-}" ]] || die "ARTENV_ROOT is not set"
-
-  local versions_dir="${ARTENV_ROOT}/versions"
-  local current_version="${ART_VERSION:-}"
-
-  local -a confs=()
-  shopt -s nullglob
-  confs=("${versions_dir}"/*.toml)
-  shopt -u nullglob
-
-  local conf version_name
-  for conf in "${confs[@]}"; do
-    version_name="$(basename "${conf}" .toml)"
-    if [[ "${version_name}" == "${current_version}" ]]; then
-      printf '* %s\n' "${version_name}"
-    else
-      printf '  %s\n' "${version_name}"
-    fi
-  done
-}
-
-main "$@"
+# Deprecated alias for `artenv version ls'. Delegates to the canonical command.
+[[ -n "${ARTENV_NO_DEPRECATION:-}" ]] || \
+  printf "artenv: 'artenv versions' is deprecated; use 'artenv version ls' instead\n" >&2
+exec artenv-version-ls "$@"

@@ -1,0 +1,62 @@
+#!/usr/bin/env bash
+
+set -euo pipefail
+
+script_dir="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
+# shellcheck source=/dev/null
+source "${script_dir}/util.sh"
+
+usage() {
+  cat <<'EOS'
+usage: artenv templates repos
+
+List configured template repositories (from template-repos/*.toml), showing
+whether each is enabled and already cached. The reserved `local' namespace is
+listed when local templates exist.
+
+Options:
+  -h, --help    Show this help
+EOS
+}
+
+main() {
+  [[ -n "${ARTENV_ROOT:-}" ]] || die "ARTENV_ROOT is not set"
+  require_yq
+
+  while [[ $# -gt 0 ]]; do
+    case "$1" in
+      -h|--help) usage; exit 0 ;;
+      *)         die "unknown option: $1" ;;
+    esac
+  done
+
+  local repos_dir="${ARTENV_ROOT}/template-repos"
+  local templates_root="${ARTENV_ROOT}/templates"
+
+  local fmt='%-18s %-45s %-8s %-6s %s\n'
+  # shellcheck disable=SC2059  # fmt is a fixed, trusted format string
+  printf "${fmt}" "NAME" "URL" "ENABLED" "CACHED" "DESCRIPTION"
+
+  local name conf url enabled desc cached
+  while IFS= read -r name; do
+    [[ -n "${name}" ]] || continue
+    conf="${repos_dir}/${name}.toml"
+    url="$(toml_get "${conf}" repo url "")"
+    enabled="$(template_repo_enabled_flag "${name}")"
+    desc="$(toml_get "${conf}" repo description "")"
+    if [[ -d "${templates_root}/${name}" ]]; then
+      cached="yes"
+    else
+      cached="no"
+    fi
+    # shellcheck disable=SC2059  # fmt is a fixed, trusted format string
+    printf "${fmt}" "${name}" "${url:--}" "${enabled}" "${cached}" "${desc}"
+  done < <(list_template_repos)
+
+  if [[ -d "${templates_root}/local" ]]; then
+    # shellcheck disable=SC2059  # fmt is a fixed, trusted format string
+    printf "${fmt}" "local" "-" "true" "yes" "user-managed templates (reserved)"
+  fi
+}
+
+main "$@"

@@ -1,3 +1,7 @@
 /versions
 /envs
 /env
+/templates
+/template-repos/*
+!/template-repos/default.toml
+/.claude

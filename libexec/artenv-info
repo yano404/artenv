@@ -14,10 +14,32 @@ status_of_path() {
   fi
 }
 
-main() {
-  [[ $# -le 1 ]] || die "usage: artenv info [env]"
+usage() {
+  cat <<'EOS'
+usage: artenv info [env]
 
+Show the configuration of an environment. With no argument, show the active
+environment ($ART_PROJECT); paths are annotated [OK]/[NG].
+
+Options:
+  -h, --help    Show this help
+EOS
+}
+
+main() {
   local env=""
+  local have_env=0
+  while [[ $# -gt 0 ]]; do
+    case "$1" in
+      -h|--help) usage; exit 0 ;;
+      -*)        die "unknown option: $1" ;;
+      *)
+        [[ "${have_env}" -eq 0 ]] || die "usage: artenv info [env]"
+        env="$1"; have_env=1; shift
+        ;;
+    esac
+  done
+
   local version_type="native"
   local art_version=""
   local apptainer_image=""
@@ -31,7 +53,7 @@ main() {
   local binds=""
   local use_artlogin="NO"
 
-  if [[ $# -eq 0 ]]; then
+  if [[ "${have_env}" -eq 0 ]]; then
     [[ -n "${ART_PROJECT:-}" ]]      || die "ART_PROJECT is not set"
     [[ -n "${ART_VERSION:-}" ]]      || die "ART_VERSION is not set"
     [[ -n "${ART_ANALYSIS_DIR:-}" ]] || die "ART_ANALYSIS_DIR is not set"
@@ -63,7 +85,6 @@ main() {
   else
     [[ -n "${ARTENV_ROOT:-}" ]] || die "ARTENV_ROOT is not set"
 
-    env="$1"
     load_env_metadata "${env}"
 
     version_type="${ENV_VERSION_TYPE}"

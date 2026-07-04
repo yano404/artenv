@@ -1,0 +1,42 @@
+#!/usr/bin/env bash
+
+set -euo pipefail
+
+script_dir="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
+# shellcheck source=/dev/null
+source "${script_dir}/util.sh"
+
+usage() {
+  cat <<'EOS'
+usage: artenv templates ls
+
+List available templates as <repo>/<template>. Includes local/* and every
+cached template from enabled repositories. Templates from disabled repos are
+hidden.
+
+Options:
+  -h, --help    Show this help
+EOS
+}
+
+main() {
+  [[ -n "${ARTENV_ROOT:-}" ]] || die "ARTENV_ROOT is not set"
+  require_yq
+
+  while [[ $# -gt 0 ]]; do
+    case "$1" in
+      -h|--help) usage; exit 0 ;;
+      *)         die "unknown option: $1" ;;
+    esac
+  done
+
+  local out
+  out="$(list_templates)"
+  if [[ -n "${out}" ]]; then
+    printf '%s\n' "${out}"
+  else
+    templates_update_hint
+  fi
+}
+
+main "$@"

@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+# shellcheck disable=SC2207  # word-splitting of compgen output is intentional in completions
 
 _artenv_list_commands() {
   command artenv commands 2>/dev/null
@@ -22,9 +23,14 @@ _artenv_list_versions() {
   done
 }
 
+_artenv_list_templates() {
+  command artenv templates ls 2>/dev/null
+}
+
 _artenv_completion() {
-  local cur cmd
+  local cur prev cmd
   cur="${COMP_WORDS[COMP_CWORD]}"
+  prev="${COMP_WORDS[COMP_CWORD-1]:-}"
   cmd="${COMP_WORDS[1]:-}"
 
   if [[ ${COMP_CWORD} -eq 1 ]]; then
@@ -33,8 +39,54 @@ _artenv_completion() {
   fi
 
   case "${cmd}" in
-    shell|default|info)
+    version)
+      # `artenv version <sub> [target]`
+      if [[ ${COMP_CWORD} -eq 2 ]]; then
+        COMPREPLY=( $(compgen -W "ls register remove archive unarchive info install current -h" -- "${cur}") )
+      else
+        case "${COMP_WORDS[2]:-}" in
+          remove|archive|unarchive|info)
+            COMPREPLY=( $(compgen -W "$(_artenv_list_versions)" -- "${cur}") )
+            ;;
+          install)
+            COMPREPLY=( $(compgen -W "--native --apptainer --update --list -l --help -h" -- "${cur}") )
+            ;;
+          *)
+            COMPREPLY=()
+            ;;
+        esac
+      fi
+      return 0
+      ;;
+    templates)
+      # `artenv templates <sub>`
+      if [[ ${COMP_CWORD} -eq 2 ]]; then
+        COMPREPLY=( $(compgen -W "ls repos update -h" -- "${cur}") )
+      else
+        COMPREPLY=()
+      fi
+      return 0
+      ;;
+    new)
+      # complete template names right after -t/--template
+      if [[ "${prev}" == "-t" || "${prev}" == "--template" ]]; then
+        COMPREPLY=( $(compgen -W "$(_artenv_list_templates)" -- "${cur}") )
+      else
+        COMPREPLY=()
+      fi
+      return 0
+      ;;
+    register|register-env|register-version)
+      # register takes a new (not-yet-existing) name; offer no completion
+      COMPREPLY=()
+      return 0
+      ;;
+    remove|archive|unarchive|remove-env|archive-env|unarchive-env|shell|default|info)
       COMPREPLY=( $(compgen -W "$(_artenv_list_envs)" -- "${cur}") )
+      return 0
+      ;;
+    remove-version|archive-version|unarchive-version)
+      COMPREPLY=( $(compgen -W "$(_artenv_list_versions)" -- "${cur}") )
       return 0
       ;;
     doctor)

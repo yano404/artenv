@@ -1,0 +1,91 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+script_dir="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
+# shellcheck source=/dev/null
+source "${script_dir}/util.sh"
+
+status_of_path() {
+  local path="$1"
+  if [[ -e "${path}" ]]; then
+    printf '[OK]'
+  else
+    printf '[NG]'
+  fi
+}
+
+usage() {
+  cat <<'EOS'
+usage: artenv version info [<version>]
+
+Show the configuration of a registered artemis version. With no argument,
+show the currently active version ($ART_VERSION). Paths are annotated with
+[OK]/[NG] according to whether they exist.
+
+Options:
+  -h, --help    Show this help
+EOS
+}
+
+main() {
+  [[ -n "${ARTENV_ROOT:-}" ]] || die "ARTENV_ROOT is not set"
+  require_yq
+
+  local version=""
+  while [[ $# -gt 0 ]]; do
+    case "$1" in
+      -h|--help) usage; exit 0 ;;
+      -*)        die "unknown option: $1" ;;
+      *)
+        [[ -z "${version}" ]] || die "usage: artenv version info [<version>]"
+        version="$1"; shift
+        ;;
+    esac
+  done
+
+  if [[ -z "${version}" ]]; then
+    [[ -n "${ART_VERSION:-}" ]] || die "no version specified and ART_VERSION is not set"
+    version="${ART_VERSION}"
+  fi
+
+  local conf="${ARTENV_ROOT}/versions/${version}.toml"
+  [[ -f "${conf}" ]] || die "version not found: ${version}"
+
+  local vtype archived suffix
+  vtype="$(toml_get "${conf}" version type native)"
+  archived="$(toml_get "${conf}" version archived false)"
+  if [[ "${archived}" == "true" ]]; then
+    suffix=" (archived)"
+  else
+    suffix=""
+  fi
+
+  printf '%s\n' "- version: ${version}${suffix}"
+  if [[ "${vtype}" == "apptainer" ]]; then
+    local uri image digest
+    uri="$(toml_get "${conf}" version uri '')"
+    image="$(toml_get "${conf}" version image '')"
+    digest="$(toml_get "${conf}" version digest '')"
+    printf '%s\n' "  - type: apptainer"
+    if [[ -n "${uri}" ]]; then
+      printf '%s\n' "  - uri: ${uri}"
+    fi
+    printf '%s\n' "  - image: ${image} $(status_of_path "${image}")"
+    if [[ -n "${digest}" ]]; then
+      printf '%s\n' "  - digest: ${digest}"
+    fi
+  else
+    local artsys rootsys yamllib yamlcmake
+    artsys="$(toml_get "${conf}" version artsys '')"
+    rootsys="$(toml_get "${conf}" version rootsys '')"
+    yamllib="$(toml_get "${conf}" version yamllib '')"
+    yamlcmake="$(toml_get "${conf}" version yamlcmake '')"
+    printf '%s\n' "  - type: native"
+    printf '%s\n' "  - artemis: ${artsys} $(status_of_path "${artsys}")"
+    printf '%s\n' "  - root: ${rootsys} $(status_of_path "${rootsys}")"
+    printf '%s\n' "  - yaml-cpp lib: ${yamllib} $(status_of_path "${yamllib}")"
+    printf '%s\n' "  - yaml-cpp cmake: ${yamlcmake} $(status_of_path "${yamlcmake}")"
+  fi
+}
+
+main "$@"

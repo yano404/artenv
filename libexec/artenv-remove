@@ -1,0 +1,106 @@
+#!/usr/bin/env bash
+
+set -euo pipefail
+
+script_dir="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
+# shellcheck source=/dev/null
+source "${script_dir}/util.sh"
+
+usage() {
+  cat <<'EOS'
+usage: artenv remove [-f|--force] [-y|--yes] [<env>]
+
+Remove a registered analysis environment. With no <env>, choose interactively.
+
+Options:
+  -f, --force   Remove even if it is the default environment (clears the default)
+  -y, --yes     Do not prompt for confirmation
+  -h, --help    Show this help
+EOS
+}
+
+main() {
+  [[ -n "${ARTENV_ROOT:-}" ]] || die "ARTENV_ROOT is not set"
+
+  local force=0 assume_yes=0
+  local env=""
+
+  while [[ $# -gt 0 ]]; do
+    case "$1" in
+      -f|--force) force=1; shift ;;
+      -y|--yes)   assume_yes=1; shift ;;
+      -h|--help)  usage; exit 0 ;;
+      -*)         die "unknown option: $1" ;;
+      *)
+        [[ -z "${env}" ]] || die "usage: artenv remove [options] <env>"
+        env="$1"; shift ;;
+    esac
+  done
+
+  local envs_dir="${ARTENV_ROOT}/envs"
+  require_dir "${envs_dir}"
+
+  if [[ -z "${env}" ]]; then
+    local -a env_names=()
+    local conf_file name
+    shopt -s nullglob
+    for conf_file in "${envs_dir}"/*.toml; do
+      name="$(basename "${conf_file}" .toml)"
+      env_names+=("${name}")
+    done
+    shopt -u nullglob
+
+    [[ ${#env_names[@]} -gt 0 ]] || die "no environments are registered"
+
+    echo "Select the environment to remove"
+    select env in "${env_names[@]}"; do
+      if [[ -n "${env:-}" ]]; then
+        break
+      else
+        echo "Wrong selection"
+      fi
+    done
+  fi
+
+  local env_conf="${envs_dir}/${env}.toml"
+  [[ -f "${env_conf}" ]] || die "environment not found: ${env}"
+
+  local default_file="${ARTENV_ROOT}/env"
+  local is_default=0
+  if [[ -f "${default_file}" ]]; then
+    local cur_default
+    cur_default="$(cat -- "${default_file}")"
+    [[ "${cur_default}" == "${env}" ]] && is_default=1
+  fi
+
+  if [[ "${is_default}" -eq 1 && "${force}" -ne 1 ]]; then
+    die "'${env}' is the default environment; use --force to remove it (the default will be cleared)"
+  fi
+
+  if [[ "${ART_PROJECT:-}" == "${env}" ]]; then
+    printf "artenv: warning: '%s' is currently active in this shell\n" "${env}" >&2
+  fi
+
+  if [[ "${assume_yes}" -ne 1 ]]; then
+    local reply=""
+    read -r -p "Remove environment '${env}'? (y/N)> " reply || true
+    case "${reply}" in
+      y|Y) ;;
+      *) echo "aborted"; exit 0 ;;
+    esac
+  fi
+
+  rm -f -- "${env_conf}"
+
+  local artlogin="${envs_dir}/${env}.artlogin.sh"
+  [[ -e "${artlogin}" ]] && rm -f -- "${artlogin}"
+
+  if [[ "${is_default}" -eq 1 ]]; then
+    rm -f -- "${default_file}"
+    printf 'default environment cleared\n'
+  fi
+
+  printf '%s was removed\n' "${env}"
+}
+
+main "$@"

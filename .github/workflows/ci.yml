@@ -1,0 +1,49 @@
+name: CI
+
+on:
+  push:
+    branches: [main, develop]
+  pull_request:
+
+jobs:
+  test:
+    name: test suite
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install yq (mikefarah v4)
+        run: |
+          sudo curl -fsSL -o /usr/local/bin/yq \
+            https://github.com/mikefarah/yq/releases/download/v4.47.1/yq_linux_amd64
+          sudo chmod +x /usr/local/bin/yq
+          yq --version
+
+      - name: Syntax check (bash -n)
+        run: |
+          shopt -s nullglob
+          for f in bin/artenv libexec/artenv libexec/artenv-* libexec/*.sh tests/*.sh; do
+            [ -f "$f" ] || continue
+            case "$f" in
+              */artenv-sh-shell) ;; # still bash, checked normally
+            esac
+            bash -n "$f"
+          done
+          echo "syntax OK"
+
+      - name: Run test suite
+        run: ./tests/run.sh
+
+  shellcheck:
+    name: shellcheck
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Run shellcheck
+        run: |
+          shellcheck --version
+          shopt -s nullglob
+          files=(libexec/artenv libexec/artenv-* libexec/util.sh libexec/artlogin.sh tests/*.sh completions/artenv.bash)
+          printf 'checking: %s\n' "${files[@]}"
+          shellcheck "${files[@]}"

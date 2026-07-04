@@ -1,10 +1,53 @@
 #!/usr/bin/env bash
 
-set -e
+set -euo pipefail
 
-if [[ -z "${ART_VERSION}" ]]; then
-    echo "ART_VERSION is not set"
-    exit 1
-fi
+script_dir="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
+# shellcheck source=/dev/null
+source "${script_dir}/util.sh"
 
-echo "${ART_VERSION}"
+version_group_usage() {
+  cat <<'EOS'
+usage: artenv version <subcommand> [args]
+
+Manage artemis versions. With no subcommand, print the current version.
+
+Subcommands:
+  current     Print the current artemis version (default)
+  ls          Print the registered artemis versions
+  register    Register an artemis version
+  remove      Remove a registered artemis version
+  archive     Archive a version (hide from `version ls`, still usable)
+  unarchive   Unarchive a version
+  info        Show the configuration of a version
+  install     Install artemis (--native: build, --apptainer: pull image)
+
+Options:
+  -h, --help  Show this help
+EOS
+}
+
+main() {
+  local action="${1:-}"
+  case "${action}" in
+    ""|current)
+      exec artenv-version-current "${@:2}"
+      ;;
+    -h|--help|help)
+      version_group_usage
+      exit 0
+      ;;
+    -*)
+      die "unknown option: ${action}"
+      ;;
+    *)
+      local target
+      target="$(command -v "artenv-version-${action}" || true)"
+      [[ -n "${target}" ]] || die "no such version subcommand: \`${action}'"
+      shift
+      exec "${target}" "$@"
+      ;;
+  esac
+}
+
+main "$@"

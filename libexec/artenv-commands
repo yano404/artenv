@@ -2,8 +2,29 @@
 set -euo pipefail
 
 script_dir="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
+# shellcheck source=/dev/null
+source "${script_dir}/util.sh"
+
+usage() {
+  cat <<'EOS'
+usage: artenv commands
+
+List all available commands.
+
+Options:
+  -h, --help    Show this help
+EOS
+}
 
 main() {
+  while [[ $# -gt 0 ]]; do
+    case "$1" in
+      -h|--help) usage; exit 0 ;;
+      -*)        die "unknown option: $1" ;;
+      *)         break ;;
+    esac
+  done
+
   local entry
   local name
 
@@ -20,6 +41,11 @@ main() {
         printf 'shell\n'
         ;;
       sh-*)
+        continue
+        ;;
+      version-*|templates-*)
+        # Group sub-actions (e.g. artenv-version-ls, artenv-templates-list) are
+        # not top-level commands; they are dispatched by their group command.
         continue
         ;;
       *)

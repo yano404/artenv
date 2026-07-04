@@ -79,6 +79,7 @@ activate_native() {
   cmake_prefix_path="$(prepend_path "${cmake_prefix_path}" "${artsys}")"
   cmake_prefix_path="$(prepend_path "${cmake_prefix_path}" "${yamlcmake}")"
 
+  # shellcheck disable=SC2016  # single quotes are intentional: emit shell code for the caller to eval
   printf 'for _artenv_cmd in artemis cmake make root artexec; do declare -f "${_artenv_cmd}" &>/dev/null && unset -f "${_artenv_cmd}"; done; unset _artenv_cmd\n'
 
   print_export "ART_PROJECT" "${env}"

@@ -1,0 +1,37 @@
+#!/usr/bin/env bash
+
+set -euo pipefail
+
+script_dir="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
+# shellcheck source=/dev/null
+source "${script_dir}/util.sh"
+
+usage() {
+  cat <<'EOS'
+usage: artenv version current
+
+Print the current artemis version.
+
+Options:
+  -h, --help    Show this help
+EOS
+}
+
+main() {
+  while [[ $# -gt 0 ]]; do
+    case "$1" in
+      -h|--help) usage; exit 0 ;;
+      -*)        die "unknown option: $1" ;;
+      *)         break ;;
+    esac
+  done
+
+  if [[ -z "${ART_VERSION:-}" ]]; then
+    echo "ART_VERSION is not set"
+    exit 1
+  fi
+
+  echo "${ART_VERSION}"
+}
+
+main "$@"

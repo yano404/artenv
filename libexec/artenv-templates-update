@@ -1,0 +1,152 @@
+#!/usr/bin/env bash
+
+set -euo pipefail
+
+script_dir="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
+# shellcheck source=/dev/null
+source "${script_dir}/util.sh"
+
+usage() {
+  cat <<'EOS'
+usage: artenv templates update [<repo>...]
+
+Clone or update template repositories into the local cache
+($ARTENV_ROOT/templates/<repo>/). With no arguments, every enabled repo is
+processed; otherwise only the named repos. Disabled repos and the reserved
+`local' namespace are always skipped. Exits non-zero if any repo fails.
+
+Options:
+  -h, --help    Show this help
+EOS
+}
+
+# Clone <url> (optionally at <ref>) into a fresh cache dir <dest>. Atomic: clone
+# into a temp dir under the templates root, then rename into place.
+clone_repo_cache() { # <dest> <url> <ref>
+  local dest="$1" url="$2" ref="$3"
+  local base tmp
+  base="$(dirname -- "${dest}")"
+  ensure_dir "${base}"
+  tmp="$(mktemp -d "${base}/.tmp.clone.XXXXXX")"
+
+  if ! git clone --quiet -- "${url}" "${tmp}"; then
+    rm -rf -- "${tmp}"
+    return 1
+  fi
+  if [[ -n "${ref}" ]]; then
+    if ! git -C "${tmp}" checkout --quiet "${ref}"; then
+      rm -rf -- "${tmp}"
+      return 1
+    fi
+  fi
+  # Drop the working git metadata; the cache is a plain template tree.
+  rm -rf -- "${tmp}/.git"
+  mv -- "${tmp}" "${dest}"
+}
+
+# Refresh an existing cache dir from its remote at <ref> (or the remote default
+# branch when <ref> is empty). The cache carries no .git, so re-clone into a
+# temp dir and swap it in atomically.
+update_repo_cache() { # <dest> <url> <ref>
+  local dest="$1" url="$2" ref="$3"
+  local base tmp
+  base="$(dirname -- "${dest}")"
+  tmp="$(mktemp -d "${base}/.tmp.update.XXXXXX")"
+
+  if ! git clone --quiet -- "${url}" "${tmp}"; then
+    rm -rf -- "${tmp}"
+    return 1
+  fi
+  if [[ -n "${ref}" ]]; then
+    if ! git -C "${tmp}" checkout --quiet "${ref}"; then
+      rm -rf -- "${tmp}"
+      return 1
+    fi
+  fi
+  rm -rf -- "${tmp}/.git"
+  rm -rf -- "${dest}"
+  mv -- "${tmp}" "${dest}"
+}
+
+main() {
+  [[ -n "${ARTENV_ROOT:-}" ]] || die "ARTENV_ROOT is not set"
+  require_yq
+  command -v git >/dev/null 2>&1 || die "git is required"
+
+  local -a requested=()
+  while [[ $# -gt 0 ]]; do
+    case "$1" in
+      -h|--help) usage; exit 0 ;;
+      -*)        die "unknown option: $1" ;;
+      *)         requested+=("$1"); shift ;;
+    esac
+  done
+
+  export GIT_TERMINAL_PROMPT=0
+
+  local repos_dir="${ARTENV_ROOT}/template-repos"
+  local templates_root="${ARTENV_ROOT}/templates"
+
+  local -a repos=()
+  if [[ ${#requested[@]} -gt 0 ]]; then
+    repos=("${requested[@]}")
+  else
+    mapfile -t repos < <(list_template_repos)
+  fi
+
+  if [[ ${#repos[@]} -eq 0 ]]; then
+    echo "no template repositories are configured"
+    return 0
+  fi
+
+  local rc=0
+  local name conf url ref dest
+  for name in "${repos[@]}"; do
+    if [[ "${name}" == "local" ]]; then
+      printf 'skipped  %s (reserved)\n' "${name}"
+      continue
+    fi
+
+    conf="${repos_dir}/${name}.toml"
+    if [[ ! -f "${conf}" ]]; then
+      printf 'failed   %s (no such repo)\n' "${name}"
+      rc=1
+      continue
+    fi
+
+    if ! template_repo_enabled "${name}"; then
+      printf 'skipped  %s (disabled)\n' "${name}"
+      continue
+    fi
+
+    url="$(toml_get "${conf}" repo url "")"
+    if [[ -z "${url}" ]]; then
+      printf 'failed   %s (no url)\n' "${name}"
+      rc=1
+      continue
+    fi
+
+    ref="$(toml_get "${conf}" repo ref "")"
+    dest="${templates_root}/${name}"
+
+    if [[ -d "${dest}" ]]; then
+      if update_repo_cache "${dest}" "${url}" "${ref}"; then
+        printf 'updated  %s\n' "${name}"
+      else
+        printf 'failed   %s (update)\n' "${name}"
+        rc=1
+      fi
+    else
+      if clone_repo_cache "${dest}" "${url}" "${ref}"; then
+        printf 'cloned   %s\n' "${name}"
+      else
+        printf 'failed   %s (clone)\n' "${name}"
+        rc=1
+      fi
+    fi
+  done
+
+  return "${rc}"
+}
+
+main "$@"
