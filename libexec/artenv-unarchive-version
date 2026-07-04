@@ -1,3 +1,5 @@
 #!/usr/bin/env bash
 # Deprecated alias for `artenv version unarchive'. Delegates to the canonical command.
+[[ -n "${ARTENV_NO_DEPRECATION:-}" ]] || \
+  printf "artenv: 'artenv unarchive-version' is deprecated; use 'artenv version unarchive' instead\n" >&2
 exec artenv-version-unarchive "$@"

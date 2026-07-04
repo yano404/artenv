@@ -1,3 +1,5 @@
 #!/usr/bin/env bash
 # Deprecated alias for `artenv register'. Delegates to the canonical command.
+[[ -n "${ARTENV_NO_DEPRECATION:-}" ]] || \
+  printf "artenv: 'artenv register-env' is deprecated; use 'artenv register' instead\n" >&2
 exec artenv-register "$@"

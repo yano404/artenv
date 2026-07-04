@@ -14,6 +14,9 @@ setup_sandbox() {
   mkdir -p "${ARTENV_ROOT}/versions" "${ARTENV_ROOT}/envs" "${ARTENV_ROOT}/images"
   # Do not inherit the developer's active shell state.
   unset ART_VERSION ART_PROJECT
+  # Silence deprecation notices by default so shim/canonical output stays
+  # byte-identical; the deprecation tests opt back in by unsetting this.
+  export ARTENV_NO_DEPRECATION=1
   EXTDIR=""
 }
 
@@ -117,7 +120,12 @@ run_in() { # <stdin_string> <args...>
 
 # --- assertions -------------------------------------------------------------
 
-fail() { printf 'ASSERT FAILED: %s\n' "$*" >&2; return 1; }
+# Abort the current test immediately. Each test runs in its own subshell (see
+# run.sh), so `exit 1` fails just that test, not the whole runner. `exit`
+# (rather than `return 1`) is deliberate: a `return` only fails the test when
+# the failing assertion happens to be the test's last statement, so a passing
+# assertion afterwards would otherwise mask a real failure.
+fail() { printf 'ASSERT FAILED: %s\n' "$*" >&2; exit 1; }
 
 assert_status()       { [[ "${1}" -eq "${2}" ]] || fail "expected exit ${2}, got ${1} ${3:-}"; }
 assert_contains()     { [[ "${1}" == *"${2}"* ]] || fail "expected output to contain '${2}'; got: ${1}"; }

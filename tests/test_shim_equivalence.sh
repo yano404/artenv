@@ -1,8 +1,10 @@
 #!/usr/bin/env bash
 # shellcheck disable=SC2154  # status/output are set by run()/run_in() in lib.sh
-# Tests for: old command names are pure exec shims to their canonical targets.
-# Because each shim is a bare `exec`, the old and new forms must produce
-# byte-for-byte identical stdout/stderr and the same exit status.
+# Tests for: old command names are exec shims to their canonical targets.
+# Apart from a suppressible deprecation notice, the old and new forms must
+# produce byte-for-byte identical stdout/stderr and the same exit status.
+# setup_sandbox exports ARTENV_NO_DEPRECATION=1, so the notice is silenced
+# here and equivalence is checked on the underlying command output.
 
 # _equiv <stdin> <old-cmdline> <new-cmdline>
 # cmdlines are space-separated argument strings (no embedded spaces needed here).
