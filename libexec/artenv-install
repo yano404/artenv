@@ -1,3 +1,5 @@
 #!/usr/bin/env bash
 # Deprecated alias for `artenv version install'. Delegates to the canonical command.
+[[ -n "${ARTENV_NO_DEPRECATION:-}" ]] || \
+  printf "artenv: 'artenv install' is deprecated; use 'artenv version install' instead\n" >&2
 exec artenv-version-install "$@"

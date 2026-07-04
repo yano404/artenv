@@ -186,6 +186,10 @@ forms above.
 | `archive-env` | `archive` |
 | `unarchive-env` | `unarchive` |
 
+Each alias prints a one-line deprecation notice to stderr (stdout is
+unaffected, so pipelines keep working). Set `ARTENV_NO_DEPRECATION=1` to
+silence the notices.
+
 ### Examples
 
 - `artenv ls`
