@@ -83,7 +83,7 @@ _artenv() {
       return 0
       ;;
     doctor)
-      compadd -- --all "${envs[@]}"
+      compadd -- --all --orphans "${envs[@]}"
       return 0
       ;;
     install)
