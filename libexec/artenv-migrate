@@ -147,9 +147,26 @@ migrate_default() {
   fi
 }
 
+usage() {
+  cat <<'EOS'
+usage: artenv migrate
+
+Migrate v1 (symlink-based) data to v2 (TOML-based).
+
+Options:
+  -h, --help    Show this help
+EOS
+}
+
 main() {
+  while [[ $# -gt 0 ]]; do
+    case "$1" in
+      -h|--help) usage; exit 0 ;;
+      *)         die "usage: artenv migrate" ;;
+    esac
+  done
+
   [[ -n "${ARTENV_ROOT:-}" ]] || die "ARTENV_ROOT is not set"
-  [[ $# -eq 0 ]] || die "usage: artenv migrate"
 
   printf 'Migrating artenv v1 -> v2 ...\n'
 
