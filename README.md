@@ -162,7 +162,7 @@ Template commands live under the `templates` group (see [Templates](#templates))
 Utility commands:
 
 - `init`                       : Configure the shell environment for artenv
-- `doctor [env|--all]`         : Diagnose a registered environment
+- `doctor [env|--all|--hygiene]` : Diagnose environments / scan store health
 - `migrate`                    : Migrate v1 (symlink) data to v2 (TOML)
 - `commands`                   : List all available commands
 - `--version`                  : Show the version of artenv
@@ -340,7 +340,14 @@ e545 was unarchived
 artenv doctor           # checks the current environment
 artenv doctor <env>     # checks the specified environment
 artenv doctor --all     # checks all registered environments
+artenv doctor --hygiene # store-wide scan for orphaned resources
 ```
+
+`--hygiene` performs a store-wide scan and reports leftovers that `remove` /
+`archive` can leave behind: unreferenced `.sif` images under `images/`,
+environments pointing at a version that no longer exists, and orphaned
+`*.artlogin.sh` files (no matching env, or `use_artlogin = false`). It exits
+non-zero when any issue is found.
 
 - `artenv migrate`
 

@@ -136,6 +136,103 @@ doctor_current() {
   doctor_env "${ART_PROJECT}"
 }
 
+# Store-wide hygiene scan: surfaces orphaned resources left behind by
+# remove/archive operations. Reports only problems; a clean store prints
+# "[OK] none" per section. Returns non-zero if any issue is found.
+doctor_hygiene() {
+  local issues=0
+  printf 'hygiene: store-wide checks\n\n'
+
+  # 1. Orphan SIF images: *.sif under images/ not referenced by any version.
+  printf 'orphan images (unreferenced .sif under images/):\n'
+  local -a sifs=()
+  shopt -s nullglob
+  sifs=("${ARTENV_ROOT}/images"/*.sif)
+  shopt -u nullglob
+  if [[ ${#sifs[@]} -eq 0 ]]; then
+    print_ok "none"
+  else
+    local -a referenced=()
+    local -a vconfs=()
+    shopt -s nullglob
+    vconfs=("${ARTENV_ROOT}/versions"/*.toml)
+    shopt -u nullglob
+    local vc img
+    for vc in "${vconfs[@]}"; do
+      img="$(yq -p toml -oy -r '.version.image // ""' "${vc}")"
+      [[ -n "${img}" ]] && referenced+=("${img}")
+    done
+    local sif found=0 r
+    for sif in "${sifs[@]}"; do
+      found=0
+      if [[ ${#referenced[@]} -gt 0 ]]; then
+        for r in "${referenced[@]}"; do
+          [[ "${r}" == "${sif}" ]] && { found=1; break; }
+        done
+      fi
+      if [[ ${found} -eq 0 ]]; then
+        print_ng "orphan: ${sif}"
+        issues=1
+      fi
+    done
+    [[ ${issues} -eq 0 ]] && print_ok "none"
+  fi
+  printf '\n'
+
+  # 2. Dangling env -> version references.
+  printf 'dangling env -> version references:\n'
+  local -a econfs=()
+  shopt -s nullglob
+  econfs=("${ARTENV_ROOT}/envs"/*.toml)
+  shopt -u nullglob
+  local section_issue=0 ec ename ver
+  for ec in "${econfs[@]}"; do
+    ename="$(basename "${ec}" .toml)"
+    ver="$(toml_get "${ec}" 'env' 'version')"
+    if [[ -z "${ver}" ]]; then
+      print_ng "env '${ename}': env.version not set"
+      section_issue=1; issues=1
+    elif [[ ! -f "${ARTENV_ROOT}/versions/${ver}.toml" ]]; then
+      print_ng "env '${ename}' -> version '${ver}' (missing)"
+      section_issue=1; issues=1
+    fi
+  done
+  [[ ${section_issue} -eq 0 ]] && print_ok "none"
+  printf '\n'
+
+  # 3. Orphan artlogin.sh: no matching env, or env has use_artlogin=false.
+  printf 'orphan artlogin.sh (no matching env / use_artlogin=false):\n'
+  local -a logins=()
+  shopt -s nullglob
+  logins=("${ARTENV_ROOT}/envs"/*.artlogin.sh)
+  shopt -u nullglob
+  section_issue=0
+  local lg lname lconf ues
+  for lg in "${logins[@]}"; do
+    lname="$(basename "${lg}" .artlogin.sh)"
+    lconf="${ARTENV_ROOT}/envs/${lname}.toml"
+    if [[ ! -f "${lconf}" ]]; then
+      print_ng "'${lname}.artlogin.sh': no matching env"
+      section_issue=1; issues=1
+    else
+      ues="$(toml_get "${lconf}" 'env' 'use_artlogin' 'false')"
+      if [[ "${ues}" != "true" ]]; then
+        print_ng "'${lname}.artlogin.sh': env '${lname}' has use_artlogin=false"
+        section_issue=1; issues=1
+      fi
+    fi
+  done
+  [[ ${section_issue} -eq 0 ]] && print_ok "none"
+  printf '\n'
+
+  if [[ ${issues} -eq 0 ]]; then
+    printf 'result: OK\n'
+  else
+    printf 'result: NG\n'
+  fi
+  return "${issues}"
+}
+
 doctor_all() {
   local envs_dir="${ARTENV_ROOT}/envs"
   local failed=0
@@ -162,10 +259,30 @@ doctor_all() {
   return "${failed}"
 }
 
+usage() {
+  cat <<'EOS'
+usage: artenv doctor [env|--all|--hygiene]
+
+Diagnose environments and store health.
+
+With no argument, checks the currently active environment ($ART_PROJECT).
+
+Modes:
+  <env>        Check a single registered environment
+  --all        Check every registered environment
+  --hygiene    Store-wide scan for orphaned resources left by remove/archive
+               (unreferenced .sif images, dangling env->version references,
+               orphan *.artlogin.sh)
+
+Options:
+  -h, --help   Show this help
+EOS
+}
+
 main() {
   [[ -n "${ARTENV_ROOT:-}" ]] || die "ARTENV_ROOT is not set"
   require_yq
-  [[ $# -le 1 ]] || die "usage: artenv doctor [env|--all]"
+  [[ $# -le 1 ]] || die "usage: artenv doctor [env|--all|--hygiene]"
 
   if [[ $# -eq 0 ]]; then
     doctor_current
@@ -173,6 +290,12 @@ main() {
   fi
 
   case "$1" in
+    -h|--help)
+      usage
+      ;;
+    --hygiene)
+      doctor_hygiene
+      ;;
     --all)
       doctor_all
       ;;
