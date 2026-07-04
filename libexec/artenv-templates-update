@@ -70,6 +70,7 @@ update_repo_cache() { # <dest> <url> <ref>
 
 main() {
   [[ -n "${ARTENV_ROOT:-}" ]] || die "ARTENV_ROOT is not set"
+  ensure_default_repo
   require_yq
   command -v git >/dev/null 2>&1 || die "git is required"
 
