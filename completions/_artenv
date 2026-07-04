@@ -40,10 +40,10 @@ _artenv() {
     version)
       # `artenv version <sub> [target]`
       if (( CURRENT == 3 )); then
-        compadd -- ls register remove archive unarchive info install current -h
+        compadd -- ls register remove archive unarchive info edit install current -h
       else
         case "${words[3]}" in
-          remove|archive|unarchive|info)
+          remove|archive|unarchive|info|edit)
             compadd -- "${versions[@]}"
             ;;
           install)
@@ -74,7 +74,7 @@ _artenv() {
       # register takes a new (not-yet-existing) name; offer no completion
       return 0
       ;;
-    remove|archive|unarchive|remove-env|archive-env|unarchive-env|shell|default|info)
+    remove|archive|unarchive|remove-env|archive-env|unarchive-env|shell|default|info|edit)
       compadd -- "${envs[@]}"
       return 0
       ;;
@@ -83,7 +83,7 @@ _artenv() {
       return 0
       ;;
     doctor)
-      compadd -- --all "${envs[@]}"
+      compadd -- --all --orphans "${envs[@]}"
       return 0
       ;;
     install)

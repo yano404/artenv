@@ -81,24 +81,27 @@ main() {
       echo "Wrong selection"
     fi
   done
+  # `select` falls through with no selection when stdin reaches EOF
+  # (non-interactive / Ctrl-D); abort cleanly instead of proceeding empty.
+  [[ -n "${version_name:-}" ]] || die "aborted"
 
   echo "${version_name} was selected"
 
-  read -e -r -p "Enter the path to working directory> " work
+  read -e -r -p "Enter the path to working directory> " work || die "aborted"
   require_dir "${work}"
   work="$(resolve_path "${work}")"
 
   while true; do
-    read -e -r -p "Use artlogin? (y/n)> " use_artlogin
+    read -e -r -p "Use artlogin? (y/n)> " use_artlogin || die "aborted"
     case "${use_artlogin}" in
       y|Y)
         require_file "${template_artlogin}"
-        read -e -r -p "Enter the path to git repos (required)> " git_repos
+        read -e -r -p "Enter the path to git repos (required)> " git_repos || die "aborted"
         [[ -n "${git_repos}" ]] || die "git repos is required when artlogin is enabled"
         break
         ;;
       n|N)
-        read -e -r -p "Enter the path to git repos (optional)> " git_repos
+        read -e -r -p "Enter the path to git repos (optional)> " git_repos || die "aborted"
         break
         ;;
       *)
@@ -109,9 +112,11 @@ main() {
 
   ensure_dir "${ARTENV_ROOT}/envs"
 
-  local tmp_conf
+  # Not `local`: the EXIT trap runs after main() unwinds, so a local would be
+  # out of scope there (and would crash under `set -u`). `${tmp_conf:-}` guards
+  # the case where we exit before the assignment.
   tmp_conf="$(mktemp "${ARTENV_ROOT}/envs/.tmp.${env_name}.XXXXXX.toml")"
-  trap 'rm -f -- "${tmp_conf}"' EXIT
+  trap 'rm -f -- "${tmp_conf:-}"' EXIT
 
   {
     printf '[env]\n'

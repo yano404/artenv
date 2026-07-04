@@ -136,6 +136,7 @@ typed directly:
 - `unarchive [env]`            : Unarchive an environment
 - `ls [-a|--all]`              : Print the environment list (`--all` includes archived)
 - `info [env]`                 : Print the detail information of an environment
+- `edit [env]`                 : Open an environment's config in $EDITOR
 - `new <dir> [-t <template>]`  : Create a working directory from a template
 - `shell [env]`                : Set or show the activated environment in the current shell
 - `default [env]`              : Set or show the default environment
@@ -150,6 +151,7 @@ Version commands live under the `version` group:
 - `version archive [version]`  : Archive a version (hidden from `version ls`, still usable)
 - `version unarchive [version]`: Unarchive a version
 - `version info [version]`     : Show the configuration of a version (defaults to the current one)
+- `version edit [version]`     : Open a version's config in $EDITOR
 - `version install [--native|--apptainer] [TAG]` : Install artemis (build from source or pull an Apptainer image)
 - `version install --update <version>` : Re-pull the Apptainer image for an existing version
 - `version help`               : Show the version group help
@@ -163,7 +165,7 @@ Template commands live under the `templates` group (see [Templates](#templates))
 Utility commands:
 
 - `init`                       : Configure the shell environment for artenv
-- `doctor [env|--all|--hygiene]` : Diagnose environments / scan store health
+- `doctor [env|--all|--orphans]` : Diagnose environments / scan store health
 - `migrate`                    : Migrate v1 (symlink) data to v2 (TOML)
 - `commands`                   : List all available commands
 - `--version`                  : Show the version of artenv
@@ -345,10 +347,10 @@ e545 was unarchived
 artenv doctor           # checks the current environment
 artenv doctor <env>     # checks the specified environment
 artenv doctor --all     # checks all registered environments
-artenv doctor --hygiene # store-wide scan for orphaned resources
+artenv doctor --orphans # store-wide scan for orphaned resources
 ```
 
-`--hygiene` performs a store-wide scan and reports leftovers that `remove` /
+`--orphans` performs a store-wide scan and reports leftovers that `remove` /
 `archive` can leave behind: unreferenced `.sif` images under `images/`,
 environments pointing at a version that no longer exists, and orphaned
 `*.artlogin.sh` files (no matching env, or `use_artlogin = false`). It exits
@@ -491,6 +493,29 @@ version = "artemis-apptainer"
 work = "/path/to/work"
 binds = ["/extra/path1", "/extra/path2"]
 ```
+
+## Versioning
+
+artenv's **major** version tracks broad themes rather than strict per-flag
+[SemVer](https://semver.org/): a change that stays within the current major's
+theme ships as a minor/patch release, even if it is technically a breaking
+change to the command surface. As an end-user CLI (not a library consumed by a
+dependency resolver), the changelog is the source of truth for what changed —
+so always read [CHANGELOG.md](CHANGELOG.md), not just the major number, when
+upgrading.
+
+**v2** covers three themes:
+
+1. Configuration migrated from symlinks to TOML (`versions/*.toml`, `envs/*.toml`).
+2. Apptainer support and the resource-grouped command taxonomy (`version` /
+   `templates` groups, implicit env commands, deprecated aliases).
+3. Templates managed via external git repositories.
+
+The next major (**v3**) is reserved for the next thematic shift beyond these.
+
+## Changelog
+
+See [CHANGELOG.md](CHANGELOG.md) for the release history.
 
 ## License
 Copyright (c) 2026 Takayuki YANO

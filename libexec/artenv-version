@@ -20,6 +20,7 @@ Subcommands:
   archive     Archive a version (hide from `version ls`, still usable)
   unarchive   Unarchive a version
   info        Show the configuration of a version
+  edit        Open a version's config in $EDITOR
   install     Install artemis (--native: build, --apptainer: pull image)
 
 Options:

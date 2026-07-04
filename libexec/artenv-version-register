@@ -10,20 +10,20 @@ write_native_conf() {
   local conf="$1"
   local artsys="" rootsys="" yamlcpp="" yamllib="" yamlcmake=""
 
-  read -e -r -p "Enter the path to artemis> " artsys
+  read -e -r -p "Enter the path to artemis> " artsys || die "aborted"
   require_dir "${artsys}"
   artsys="$(resolve_path "${artsys}")"
   require_dir "${artsys}/bin"
   require_dir "${artsys}/lib"
 
-  read -e -r -p "Enter the path to root> " rootsys
+  read -e -r -p "Enter the path to root> " rootsys || die "aborted"
   require_dir "${rootsys}"
   rootsys="$(resolve_path "${rootsys}")"
   require_dir "${rootsys}/bin"
   require_dir "${rootsys}/lib"
   require_file "${rootsys}/bin/root-config"
 
-  read -e -r -p "Enter the path to yaml-cpp> " yamlcpp
+  read -e -r -p "Enter the path to yaml-cpp> " yamlcpp || die "aborted"
   require_dir "${yamlcpp}"
   yamlcpp="$(resolve_path "${yamlcpp}")"
 
@@ -59,7 +59,7 @@ write_apptainer_conf() {
 
   command -v apptainer >/dev/null 2>&1 || die "apptainer command not found"
 
-  read -e -r -p "Enter the path to Apptainer image (.sif)> " image_path
+  read -e -r -p "Enter the path to Apptainer image (.sif)> " image_path || die "aborted"
   require_file "${image_path}"
   image_path="$(resolve_path "${image_path}")"
 
@@ -112,12 +112,17 @@ main() {
       echo "Wrong selection"
     fi
   done
+  # `select` falls through with no selection when stdin reaches EOF
+  # (non-interactive / Ctrl-D); abort cleanly instead of proceeding empty.
+  [[ -n "${version_type:-}" ]] || die "aborted"
 
   ensure_dir "${ARTENV_ROOT}/versions"
 
-  local tmp_conf
+  # Not `local`: the EXIT trap runs after main() unwinds, so a local would be
+  # out of scope there (and would crash under `set -u`). `${tmp_conf:-}` guards
+  # the case where we exit before the assignment.
   tmp_conf="$(mktemp "${ARTENV_ROOT}/versions/.tmp.${version}.XXXXXX.toml")"
-  trap 'rm -f -- "${tmp_conf}"' EXIT
+  trap 'rm -f -- "${tmp_conf:-}"' EXIT
 
   if [[ "${version_type}" == "apptainer" ]]; then
     write_apptainer_conf "${tmp_conf}"

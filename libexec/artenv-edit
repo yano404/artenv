@@ -1,0 +1,55 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+script_dir="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
+# shellcheck source=/dev/null
+source "${script_dir}/util.sh"
+
+usage() {
+  cat <<'EOS'
+usage: artenv edit [env]
+
+Open an environment's config in $EDITOR. With no argument, edit the active
+environment ($ART_PROJECT). After editing, the file is checked for valid TOML
+syntax.
+
+Options:
+  -h, --help    Show this help
+EOS
+}
+
+main() {
+  [[ -n "${ARTENV_ROOT:-}" ]] || die "ARTENV_ROOT is not set"
+  require_yq
+
+  local env=""
+  while [[ $# -gt 0 ]]; do
+    case "$1" in
+      -h|--help) usage; exit 0 ;;
+      -*)        die "unknown option: $1" ;;
+      *)
+        [[ -z "${env}" ]] || die "usage: artenv edit [env]"
+        env="$1"; shift
+        ;;
+    esac
+  done
+
+  if [[ -z "${env}" ]]; then
+    [[ -n "${ART_PROJECT:-}" ]] || die "no environment specified and ART_PROJECT is not set"
+    env="${ART_PROJECT}"
+  fi
+
+  local conf="${ARTENV_ROOT}/envs/${env}.toml"
+  [[ -f "${conf}" ]] || die "environment not found: ${env}"
+
+  local editor="${VISUAL:-${EDITOR:-vi}}"
+  # shellcheck disable=SC2086  # editor may carry arguments (e.g. `code -w`)
+  ${editor} "${conf}"
+
+  if ! yq -p toml -oy '.' "${conf}" >/dev/null 2>&1; then
+    printf 'artenv: warning: %s is not valid TOML after editing\n' "${conf}" >&2
+    exit 1
+  fi
+}
+
+main "$@"
