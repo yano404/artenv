@@ -35,10 +35,10 @@ function main() {
     # init and never write to stdout (stdout is eval'd by the shell function).
     if [[ ! -d "${ARTENV_ROOT}/template-repos" \
           && -f "${ARTENV_ROOT}/share/template-repos/default.toml" ]]; then
-      mkdir -p -- "${ARTENV_ROOT}/template-repos" 2>/dev/null \
-        && cp -- "${ARTENV_ROOT}/share/template-repos/default.toml" \
-                 "${ARTENV_ROOT}/template-repos/default.toml" 2>/dev/null \
-        || true
+      if mkdir -p -- "${ARTENV_ROOT}/template-repos" 2>/dev/null; then
+        cp -- "${ARTENV_ROOT}/share/template-repos/default.toml" \
+              "${ARTENV_ROOT}/template-repos/default.toml" 2>/dev/null || true
+      fi
     fi
 
     if [[ -f "${ARTENV_ROOT}/env" ]]; then
