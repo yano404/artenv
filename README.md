@@ -136,6 +136,7 @@ typed directly:
 - `unarchive [env]`            : Unarchive an environment
 - `ls [-a|--all]`              : Print the environment list (`--all` includes archived)
 - `info [env]`                 : Print the detail information of an environment
+- `edit [env]`                 : Open an environment's config in $EDITOR
 - `new <dir> [-t <template>]`  : Create a working directory from a template
 - `shell [env]`                : Set or show the activated environment in the current shell
 - `default [env]`              : Set or show the default environment
@@ -150,6 +151,7 @@ Version commands live under the `version` group:
 - `version archive [version]`  : Archive a version (hidden from `version ls`, still usable)
 - `version unarchive [version]`: Unarchive a version
 - `version info [version]`     : Show the configuration of a version (defaults to the current one)
+- `version edit [version]`     : Open a version's config in $EDITOR
 - `version install [--native|--apptainer] [TAG]` : Install artemis (build from source or pull an Apptainer image)
 - `version install --update <version>` : Re-pull the Apptainer image for an existing version
 - `version help`               : Show the version group help
