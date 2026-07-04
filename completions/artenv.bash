@@ -42,10 +42,10 @@ _artenv_completion() {
     version)
       # `artenv version <sub> [target]`
       if [[ ${COMP_CWORD} -eq 2 ]]; then
-        COMPREPLY=( $(compgen -W "ls register remove archive unarchive install current -h" -- "${cur}") )
+        COMPREPLY=( $(compgen -W "ls register remove archive unarchive info install current -h" -- "${cur}") )
       else
         case "${COMP_WORDS[2]:-}" in
-          remove|archive|unarchive)
+          remove|archive|unarchive|info)
             COMPREPLY=( $(compgen -W "$(_artenv_list_versions)" -- "${cur}") )
             ;;
           install)

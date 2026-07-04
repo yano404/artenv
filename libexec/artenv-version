@@ -19,6 +19,7 @@ Subcommands:
   remove      Remove a registered artemis version
   archive     Archive a version (hide from `version ls`, still usable)
   unarchive   Unarchive a version
+  info        Show the configuration of a version
   install     Install artemis (--native: build, --apptainer: pull image)
 
 Options:
