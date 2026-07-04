@@ -67,9 +67,13 @@ main() {
     image="$(toml_get "${conf}" version image '')"
     digest="$(toml_get "${conf}" version digest '')"
     printf '%s\n' "  - type: apptainer"
-    [[ -n "${uri}" ]] && printf '%s\n' "  - uri: ${uri}"
+    if [[ -n "${uri}" ]]; then
+      printf '%s\n' "  - uri: ${uri}"
+    fi
     printf '%s\n' "  - image: ${image} $(status_of_path "${image}")"
-    [[ -n "${digest}" ]] && printf '%s\n' "  - digest: ${digest}"
+    if [[ -n "${digest}" ]]; then
+      printf '%s\n' "  - digest: ${digest}"
+    fi
   else
     local artsys rootsys yamllib yamlcmake
     artsys="$(toml_get "${conf}" version artsys '')"
