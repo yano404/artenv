@@ -235,6 +235,128 @@ resolve_template() {
   esac
 }
 
+# --- multi-user project skeleton -------------------------------------------
+# Helpers for `artenv new --multiuser`: create an empty, group-shared analysis
+# directory and seed a shared upstream bare git repository from a template.
+
+# Return 0 if <dest> looks like a remote destination (URL or scp-like
+# user@host:path), else 1. Used to reject remote repos in the local-only MVP.
+dest_is_remote() {
+  local dest="$1"
+  case "${dest}" in
+    *://*) return 0 ;;
+    *@*:*) return 0 ;;
+    *)     return 1 ;;
+  esac
+}
+
+# Ensure <dir> exists and is writable by probing with a temp subdirectory.
+# <label> is used to phrase the error message.
+require_writable_dir() {
+  local dir="$1"
+  local label="$2"
+  [[ -d "${dir}" ]] || die "${label} not found: ${dir}"
+  local probe
+  if ! probe=$(mktemp -d "${dir}/.artenv-probe.XXXXXX" 2>/dev/null); then
+    die "${label} is not writable: ${dir}"
+  fi
+  rmdir -- "${probe}"
+}
+
+# Return 0 if <repo> is cloneable and has a `main` branch, else 1.
+repo_has_main() {
+  local repo="$1"
+  git ls-remote --heads -- "${repo}" 2>/dev/null | grep -q 'refs/heads/main'
+}
+
+# Create <dir> as an empty, group-shared directory (mode 2770: group rwx +
+# setgid, no world access). If <dir> already exists it must be an empty
+# directory. Never removes anything; the caller owns cleanup.
+create_shared_dir() {
+  local dir="$1"
+  if [[ -e "${dir}" ]]; then
+    [[ -d "${dir}" ]] || die "${dir} is not a directory"
+    if [[ -n "$(ls -A -- "${dir}" 2>/dev/null)" ]]; then
+      die "shared directory is not empty: ${dir}"
+    fi
+  else
+    mkdir -- "${dir}" || die "failed to create shared directory: ${dir}"
+  fi
+  if ! chmod 2770 -- "${dir}"; then
+    die "failed to set group-shared permissions on: ${dir}"
+  fi
+}
+
+# Seed a shared upstream bare repository at <repo> from the template directory
+# <template_path>, committing on branch `main` with a message referencing the
+# template label <rel>. The bare repo is created with --shared=group so group
+# members can push. On any failure the self-created temp working repo and the
+# bare repo are removed before dying; the caller owns removal of the enclosing
+# shared directory.
+bootstrap_shared_repo() {
+  local template_path="$1"
+  local repo="$2"
+  local rel="$3"
+
+  if [[ -e "${template_path}/.git" ]]; then
+    die "template must not contain a .git entry: ${template_path}"
+  fi
+
+  local parent
+  parent="$(dirname -- "${repo}")"
+  require_writable_dir "${parent}" "repository parent directory"
+
+  if [[ -e "${repo}" ]]; then
+    [[ -d "${repo}" ]] || die "repository destination is not empty: ${repo}"
+    if [[ -n "$(ls -A -- "${repo}" 2>/dev/null)" ]]; then
+      die "repository destination is not empty: ${repo}"
+    fi
+  fi
+
+  # -b main so the bare's HEAD is deterministic (independent of the host's
+  # init.defaultBranch); otherwise `git clone` checks out the wrong/absent
+  # default branch and yields an empty working tree.
+  if ! git init -q --bare --shared=group -b main -- "${repo}"; then
+    die "failed to create bare repository: ${repo}"
+  fi
+
+  # Seed via a throwaway working repo. A git identity is set explicitly so the
+  # commit succeeds in a hermetic environment (CI) with no global git config.
+  local tmp
+  tmp="$(mktemp -d)"
+  _bsr_fail() { rm -rf -- "${tmp}" "${repo}"; }
+
+  if ! git init -q -b main -- "${tmp}"; then
+    _bsr_fail; die "failed to initialize temporary repository"
+  fi
+  if ! git -C "${tmp}" config user.name "artenv"; then
+    _bsr_fail; die "failed to configure temporary repository"
+  fi
+  if ! git -C "${tmp}" config user.email "artenv@localhost"; then
+    _bsr_fail; die "failed to configure temporary repository"
+  fi
+  if ! cp -rT -- "${template_path}" "${tmp}"; then
+    _bsr_fail; die "failed to copy template into temporary repository"
+  fi
+  if ! git -C "${tmp}" add -A; then
+    _bsr_fail; die "failed to stage template files"
+  fi
+  if ! git -C "${tmp}" commit -q -m "Seed from template ${rel}"; then
+    _bsr_fail; die "failed to commit template files (is the template empty?)"
+  fi
+  if ! git -C "${tmp}" push -q -- "${repo}" main; then
+    _bsr_fail; die "failed to push seed commit to: ${repo}"
+  fi
+
+  if ! repo_has_main "${repo}"; then
+    rm -rf -- "${tmp}" "${repo}"
+    die "seeded repository is not cloneable (no main branch): ${repo}"
+  fi
+
+  rm -rf -- "${tmp}"
+  return 0
+}
+
 remove_path() {
   local path_list="${1-}"
   local target="${2-}"

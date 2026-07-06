@@ -68,16 +68,35 @@ _artenv_completion() {
       return 0
       ;;
     new)
-      # complete template names right after -t/--template
+      # complete template names after -t/--template; dirs after --repo; flags
+      # when the current word starts with a dash.
       if [[ "${prev}" == "-t" || "${prev}" == "--template" ]]; then
         COMPREPLY=( $(compgen -W "$(_artenv_list_templates)" -- "${cur}") )
+      elif [[ "${prev}" == "--repo" ]]; then
+        COMPREPLY=( $(compgen -d -- "${cur}") )
+      elif [[ "${cur}" == -* ]]; then
+        COMPREPLY=( $(compgen -W "-t --template --multiuser --repo -h --help" -- "${cur}") )
       else
         COMPREPLY=()
       fi
       return 0
       ;;
-    register|register-env|register-version)
-      # register takes a new (not-yet-existing) name; offer no completion
+    register|register-env)
+      # `artenv register <new-env> [flags]`. The env name is new (not-yet-
+      # existing) so it gets no completion, but the flags and their values do.
+      if [[ "${prev}" == "--version" ]]; then
+        COMPREPLY=( $(compgen -W "$(_artenv_list_versions)" -- "${cur}") )
+      elif [[ "${prev}" == "--work" || "${prev}" == "--repos" ]]; then
+        COMPREPLY=( $(compgen -d -- "${cur}") )
+      elif [[ "${cur}" == -* ]]; then
+        COMPREPLY=( $(compgen -W "--version --work --repos --multiuser --singleuser -h --help" -- "${cur}") )
+      else
+        COMPREPLY=()
+      fi
+      return 0
+      ;;
+    register-version)
+      # register-version takes a new (not-yet-existing) name; offer no completion
       COMPREPLY=()
       return 0
       ;;
@@ -95,6 +114,10 @@ _artenv_completion() {
       ;;
     install)
       COMPREPLY=( $(compgen -W "--native --apptainer --update --list -l --help -h" -- "${cur}") )
+      return 0
+      ;;
+    upgrade)
+      COMPREPLY=( $(compgen -W "-h --help" -- "${cur}") )
       return 0
       ;;
     *)

@@ -90,6 +90,37 @@ Enter the path to git repos (required)> /path/to/git_repos or URL of git repos
 <env-name> was registered
 ```
 
+Each field can also be supplied via a flag, so the command can run
+non-interactively (for HPC/batch jobs and scripting):
+
+```sh
+artenv register <env-name> \
+  --version artemis-vYYY \
+  --work /path/to/analysis_directory \
+  --singleuser
+```
+
+Flags:
+
+- `--version <version>` — Artemis version to use (must be registered and not
+  archived).
+- `--work <dir>` — path to the working directory (must exist).
+- `--repos <url|path>` — git repos location. Stored raw, so a URL stays a URL.
+  Required together with `--multiuser`.
+- `--multiuser` — multi-user environment: enable artlogin
+  (`use_artlogin = true`).
+- `--singleuser` — single-user environment: disable artlogin
+  (`use_artlogin = false`).
+
+Resolution is per field: a flag wins; otherwise, on a tty, the omitted field
+falls back to its interactive prompt; otherwise a sensible default is used
+(single-user, no git repos) or the command exits asking for the missing flag.
+A bare `artenv register <env-name>` on a tty is unchanged — it prompts for
+every field exactly as before.
+
+When it is not a tty, `--version` and `--work` are required (there is nothing
+to prompt); artlogin defaults to single-user unless `--multiuser` is given.
+
 ### 4. Fetch project templates
 
 Fetch the template repositories once so that `artenv new` can scaffold from
@@ -138,6 +169,7 @@ typed directly:
 - `info [env]`                 : Print the detail information of an environment
 - `edit [env]`                 : Open an environment's config in $EDITOR
 - `new <dir> [-t <template>]`  : Create a working directory from a template
+- `new --multiuser <dest> [--repo <repo>] -t <template>` : Set up a shared multi-user project skeleton (see [Multi-user projects](#multi-user-projects-artenv-new---multiuser))
 - `shell [env]`                : Set or show the activated environment in the current shell
 - `default [env]`              : Set or show the default environment
 
@@ -167,6 +199,7 @@ Utility commands:
 - `init`                       : Configure the shell environment for artenv
 - `doctor [env|--all|--orphans]` : Diagnose environments / scan store health
 - `migrate`                    : Migrate v1 (symlink) data to v2 (TOML)
+- `upgrade`                    : Update artenv itself to the latest release (see [Upgrading](#upgrading))
 - `commands`                   : List all available commands
 - `--version`                  : Show the version of artenv
 
@@ -427,6 +460,51 @@ fetched, updated, or removed by artenv.
 > first run from the bundled `share/template-repos/default.toml`, so editing it
 > never dirties the working tree or conflicts on upgrade.
 
+### Multi-user projects (`artenv new --multiuser`)
+
+For a project shared by several users, `artenv new --multiuser` sets up the
+skeleton: an empty, group-shared analysis directory plus a seeded upstream git
+repository that everyone clones from. It is a **two-step** flow — `new
+--multiuser` does *not* register an environment; it prints the `register`
+command to run next.
+
+**Step 1 — create the shared skeleton:**
+
+```sh
+artenv new --multiuser /shared/myproject -t default/standard
+```
+
+This creates two artifacts:
+
+- **`/shared/myproject`** — an empty directory with mode `2770` (setgid +
+  group `rwx`, no world access). The setgid bit means files created inside
+  inherit the directory's group, so collaborators can read and write each
+  other's work; set your `umask` to `007` (or `002`) so new files stay
+  group-writable. The directory must be absent or empty beforehand — `artenv`
+  refuses a non-empty target. **The template does not go here.**
+- **the upstream repo** — a bare repository created with
+  `git init --bare --shared=group` on branch `main`, seeded from the template.
+  It defaults to `/shared/myproject/myproject.git`; pass `--repo <path>` to put
+  it elsewhere. **The template lands only in this repo.**
+
+MVP is **local bare repositories only**: a `--repo` that looks like a URL or an
+`scp`-style `user@host:path` destination is rejected with "remote destinations
+are not yet supported; use a local path". `-t <template>` is required in
+multiuser mode.
+
+**Step 2 — register an environment** pointing `--work` at the shared directory
+and `--repos` at the upstream repo (the command is printed for you):
+
+```sh
+artenv register myproject --version <version> \
+  --work /shared/myproject --repos /shared/myproject/myproject.git --multiuser
+```
+
+**Step 3 — each user logs in.** With the multi-user (artlogin) environment
+active, `artlogin <name>` clones the upstream repo into a per-user subdirectory
+of the shared directory, so everyone works from their own checkout of the same
+history.
+
 ## Configuration Files
 
 artenv stores version and environment settings as TOML files under `$ARTENV_ROOT`.
@@ -497,6 +575,42 @@ version = "artemis-apptainer"
 work = "/path/to/work"
 binds = ["/extra/path1", "/extra/path2"]
 ```
+
+## Upgrading
+
+To update artenv itself to the latest release, run:
+
+```sh
+artenv upgrade
+```
+
+This fetches tags from the remote and checks out the newest `vX.Y.Z` tag,
+leaving the checkout on a **detached HEAD** at that tag — this is normal and
+expected.
+
+Only artenv's tracked core files are updated. All runtime data — `versions/`,
+`envs/`, `env`, `templates/`, `template-repos/`, `images/` — is gitignored and
+never touched. Thanks to the seed pattern, even `template-repos/default.toml` is
+untracked (the bundled copy lives at `share/template-repos/default.toml` and is
+copied into place on first run), so as long as you have not hand-edited any
+tracked core file, `artenv upgrade` updates cleanly.
+
+`artenv upgrade` never stashes. If you have local changes to tracked files it
+fails fast rather than touching your edits. To upgrade anyway, stash them first
+and reapply afterwards:
+
+```sh
+git -C "$ARTENV_ROOT" stash
+artenv upgrade
+git -C "$ARTENV_ROOT" stash pop
+```
+
+(This is the general form of the `git pull` conflict note from the v2.2.1
+upgrade instructions.)
+
+In an Apptainer setup, `artenv upgrade` updates only the artenv code. It does
+**not** re-pull container images; update those separately with
+`artenv version install --update <version>`.
 
 ## Versioning
 
