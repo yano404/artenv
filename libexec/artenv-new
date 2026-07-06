@@ -9,16 +9,24 @@ source "${script_dir}/util.sh"
 usage() {
   cat <<'EOS'
 usage: artenv new <dir> [-t|--template [<repo>/]<name>]
+       artenv new --multiuser <dest> [--repo <repo>] -t <template>
 
-Create a new working directory from a template.
+Create a working directory from a template, or (with --multiuser) set up the
+skeleton for a shared multi-user project: an empty group-shared directory plus
+a seeded upstream git repository. --multiuser does NOT register an environment;
+it prints the `artenv register ... --multiuser` command to run next.
 
-The template may be qualified (<repo>/<name>) or unqualified (<name>). An
-unqualified name is searched across all cached repositories and local/; it is
-an error if it matches more than one template. With no -t and a tty, choose
-interactively.
+Modes:
+  <dir> [-t T]            Scaffold: copy the template into <dir>.
+  --multiuser <dest>      Create the shared dir <dest> (empty, group-shared) and
+                          seed an upstream bare repo from -t. The template lands
+                          ONLY in the repo, not in <dest>.
 
 Options:
-  -t, --template [<repo>/]<name>   Template to use
+  -t, --template [<repo>/]<name>   Template to use (required with --multiuser)
+      --multiuser                  Multi-user skeleton mode
+      --repo <repo>                Upstream repo location (multiuser; local path
+                                   only). Default <dest>/<basename>.git
   -h, --help                       Show this help
 EOS
 }
@@ -28,6 +36,7 @@ main() {
   require_yq
 
   local dir="" template_spec="" have_template=0
+  local multiuser=0 repo_dest="" have_repo=0
   while [[ $# -gt 0 ]]; do
     case "$1" in
       -h|--help) usage; exit 0 ;;
@@ -36,6 +45,12 @@ main() {
         template_spec="$2"; have_template=1; shift 2 ;;
       --template=*)
         template_spec="${1#*=}"; have_template=1; shift ;;
+      --multiuser) multiuser=1; shift ;;
+      --repo)
+        [[ $# -ge 2 ]] || die "option $1 requires an argument"
+        repo_dest="$2"; have_repo=1; shift 2 ;;
+      --repo=*)
+        repo_dest="${1#*=}"; have_repo=1; shift ;;
       -*) die "unknown option: $1" ;;
       *)
         [[ -z "${dir}" ]] || die "usage: artenv new <dir> [-t <template>]"
@@ -43,10 +58,59 @@ main() {
     esac
   done
 
-  [[ -n "${dir}" ]] || { usage >&2; exit 1; }
-
   local templates_root="${ARTENV_ROOT}/templates"
   local template_path=""
+
+  # --- multiuser skeleton mode ----------------------------------------------
+  if [[ "${multiuser}" -eq 1 ]]; then
+    [[ -n "${dir}" ]]              || die "artenv new --multiuser requires a shared directory: artenv new --multiuser <dest> -t <template>"
+    [[ "${have_template}" -eq 1 ]] || die "artenv new --multiuser requires -t <template>"
+    if [[ "${have_repo}" -eq 1 ]] && dest_is_remote "${repo_dest}"; then
+      die "remote destinations are not yet supported; use a local path"
+    fi
+
+    resolve_template "${template_spec}"
+    template_path="${RESOLVED_TEMPLATE_PATH}"
+
+    local dest repo rel
+    dest="$(resolve_path "${dir}")"
+    if [[ "${have_repo}" -eq 1 ]]; then
+      repo="${repo_dest}"
+    else
+      repo="${dest}/$(basename -- "${dest}").git"
+    fi
+    rel="${template_path#"${templates_root}/"}"
+
+    # Cleanup discipline mirrors artenv-register: the EXIT trap runs after
+    # main() unwinds, so these must NOT be local, and the trap uses ${var:-}
+    # to stay set-u safe. A pre-existing (empty) dest is preserved on failure
+    # (its _ne_dest stays empty); the repo we created inside it is still
+    # removed.
+    local dest_preexisted=0
+    [[ -e "${dest}" ]] && dest_preexisted=1
+    _ne_dest=""; _ne_repo=""
+    [[ "${dest_preexisted}" -eq 0 ]] && _ne_dest="${dest}"
+    trap 'rm -rf -- "${_ne_repo:-}" "${_ne_dest:-}"' EXIT
+
+    require_writable_dir "$(dirname -- "${dest}")" "shared directory parent"
+    create_shared_dir "${dest}"
+    _ne_repo="${repo}"
+    bootstrap_shared_repo "${template_path}" "${repo}" "${rel}"
+
+    trap - EXIT
+    printf 'created shared analysis directory %s (empty, group-shared)\n' "${dest}"
+    printf 'seeded upstream repository       %s (from template %s)\n' "${repo}" "${rel}"
+    printf '\n'
+    printf 'Next: register an environment for this project:\n'
+    printf '  artenv register <env> --version <version> --work %s --repos %s --multiuser\n' "${dest}" "${repo}"
+    return 0
+  fi
+
+  # --- single-user scaffold mode --------------------------------------------
+  if [[ "${have_repo}" -eq 1 ]]; then
+    die "--repo is only valid with --multiuser"
+  fi
+  [[ -n "${dir}" ]] || { usage >&2; exit 1; }
 
   if [[ "${have_template}" -eq 1 ]]; then
     resolve_template "${template_spec}"
