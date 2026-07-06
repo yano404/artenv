@@ -83,18 +83,19 @@ main() {
 
     # Cleanup discipline mirrors artenv-register: the EXIT trap runs after
     # main() unwinds, so these must NOT be local, and the trap uses ${var:-}
-    # to stay set-u safe. A pre-existing (empty) dest is preserved on failure
-    # (its _ne_dest stays empty); the repo we created inside it is still
-    # removed.
-    local dest_preexisted=0
+    # to stay set-u safe. We only ever remove artifacts we created ourselves:
+    # a pre-existing dest or a pre-existing --repo destination is preserved on
+    # failure (its _ne_* stays empty), so we never delete a user's directory.
+    local dest_preexisted=0 repo_preexisted=0
     [[ -e "${dest}" ]] && dest_preexisted=1
+    [[ -e "${repo}" ]] && repo_preexisted=1
     _ne_dest=""; _ne_repo=""
     [[ "${dest_preexisted}" -eq 0 ]] && _ne_dest="${dest}"
     trap 'rm -rf -- "${_ne_repo:-}" "${_ne_dest:-}"' EXIT
 
     require_writable_dir "$(dirname -- "${dest}")" "shared directory parent"
     create_shared_dir "${dest}"
-    _ne_repo="${repo}"
+    [[ "${repo_preexisted}" -eq 0 ]] && _ne_repo="${repo}"
     bootstrap_shared_repo "${template_path}" "${repo}" "${rel}"
 
     trap - EXIT
