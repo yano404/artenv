@@ -1,0 +1,111 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+script_dir="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
+# shellcheck source=/dev/null
+source "${script_dir}/util.sh"
+
+usage() {
+  cat <<'EOS'
+usage: artenv upgrade
+
+Update artenv itself to the latest released tag by checking out the newest
+vX.Y.Z tag from the remote. Runtime data (versions/envs/templates/...) is
+gitignored and never touched. This leaves the checkout on a detached HEAD at
+the release tag, which is normal. Fails fast (never stashes) if you have local
+changes to tracked files.
+
+Options:
+  -h, --help    Show this help
+EOS
+}
+
+# Report a checkout's version. Prefer the tree's own `--version` command (the
+# version string is its single source of truth); fall back to the short hash if
+# that helper is missing (e.g. a very old checkout).
+version_of() {
+  local root="$1"
+  if [[ -x "${root}/libexec/artenv---version" ]]; then
+    "${root}/libexec/artenv---version"
+  else
+    printf 'artenv (%s)' "$(git -C "${root}" rev-parse --short HEAD)"
+  fi
+}
+
+main() {
+  # Parse flags before touching git, so `-h` etc. never depend on repo state.
+  while [[ $# -gt 0 ]]; do
+    case "$1" in
+      -h|--help) usage; exit 0 ;;
+      -*)        die "unknown option: $1" ;;
+      *)         usage >&2; die "unexpected argument: $1" ;;
+    esac
+  done
+
+  # Preflight: fail with a helpful message before doing any network work.
+  [[ -n "${ARTENV_ROOT:-}" ]] || die "ARTENV_ROOT is not set"
+
+  if ! command -v git >/dev/null 2>&1; then
+    die "git is required"
+  fi
+
+  if ! git -C "${ARTENV_ROOT}" rev-parse --is-inside-work-tree >/dev/null 2>&1; then
+    die "${ARTENV_ROOT} is not a git checkout; reinstall by cloning the repo"
+  fi
+
+  if [[ -z "$(git -C "${ARTENV_ROOT}" remote)" ]]; then
+    die "no git remote configured"
+  fi
+
+  # Never block on an interactive credential/host prompt; fail fast instead.
+  export GIT_TERMINAL_PROMPT=0
+
+  local before
+  before="$(version_of "${ARTENV_ROOT}")"
+
+  if ! git -C "${ARTENV_ROOT}" fetch --tags --quiet; then
+    die "failed to fetch from remote (check network/credentials)"
+  fi
+
+  local latest
+  latest="$(git -C "${ARTENV_ROOT}" tag --list 'v*' --sort=-v:refname | head -n1)"
+  if [[ -z "${latest}" ]]; then
+    die "no release tags found on the remote"
+  fi
+
+  local tag_commit head_commit
+  tag_commit="$(git -C "${ARTENV_ROOT}" rev-parse "${latest}^{commit}")"
+  head_commit="$(git -C "${ARTENV_ROOT}" rev-parse HEAD)"
+
+  if [[ "${tag_commit}" == "${head_commit}" ]]; then
+    printf 'Already up to date (%s)\n' "${before}"
+    return 0
+  fi
+
+  # Downgrade guard: if the latest tag is already an ancestor of HEAD, we are at
+  # or ahead of the newest release (e.g. a developer on `develop`); do not roll
+  # back to the tag.
+  if git -C "${ARTENV_ROOT}" merge-base --is-ancestor "${tag_commit}" HEAD; then
+    printf 'Already at or ahead of the latest release (%s); nothing to do\n' "${before}"
+    return 0
+  fi
+
+  # Dirty guard (tracked files only). Runtime data (versions/envs/env/templates/
+  # template-repos/images/.claude) is gitignored, so it can never trip this; only
+  # edits to tracked core files do. We never stash -- fail fast and let the user
+  # decide.
+  if ! git -C "${ARTENV_ROOT}" diff --quiet || ! git -C "${ARTENV_ROOT}" diff --cached --quiet; then
+    die "you have local changes to tracked files; commit/stash/reset them, then re-run"
+  fi
+
+  # Detached HEAD at the release tag is the intended state.
+  if ! git -C "${ARTENV_ROOT}" checkout --quiet "${latest}"; then
+    die "failed to check out ${latest}"
+  fi
+
+  local after
+  after="$(version_of "${ARTENV_ROOT}")"
+  printf 'Upgraded artenv: %s -> %s\n' "${before}" "${after}"
+}
+
+main "$@"

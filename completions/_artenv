@@ -107,6 +107,10 @@ _artenv() {
       compadd -- --native --apptainer --update --list -l --help -h
       return 0
       ;;
+    upgrade)
+      compadd -- -h --help
+      return 0
+      ;;
     *)
       return 0
       ;;
