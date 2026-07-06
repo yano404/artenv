@@ -313,7 +313,10 @@ bootstrap_shared_repo() {
     fi
   fi
 
-  if ! git init -q --bare --shared=group -- "${repo}"; then
+  # -b main so the bare's HEAD is deterministic (independent of the host's
+  # init.defaultBranch); otherwise `git clone` checks out the wrong/absent
+  # default branch and yields an empty working tree.
+  if ! git init -q --bare --shared=group -b main -- "${repo}"; then
     die "failed to create bare repository: ${repo}"
   fi
 
