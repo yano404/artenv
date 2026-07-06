@@ -90,6 +90,37 @@ Enter the path to git repos (required)> /path/to/git_repos or URL of git repos
 <env-name> was registered
 ```
 
+Each field can also be supplied via a flag, so the command can run
+non-interactively (for HPC/batch jobs and scripting):
+
+```sh
+artenv register <env-name> \
+  --version artemis-vYYY \
+  --work /path/to/analysis_directory \
+  --singleuser
+```
+
+Flags:
+
+- `--version <version>` — Artemis version to use (must be registered and not
+  archived).
+- `--work <dir>` — path to the working directory (must exist).
+- `--repos <url|path>` — git repos location. Stored raw, so a URL stays a URL.
+  Required together with `--multiuser`.
+- `--multiuser` — multi-user environment: enable artlogin
+  (`use_artlogin = true`).
+- `--singleuser` — single-user environment: disable artlogin
+  (`use_artlogin = false`).
+
+Resolution is per field: a flag wins; otherwise, on a tty, the omitted field
+falls back to its interactive prompt; otherwise a sensible default is used
+(single-user, no git repos) or the command exits asking for the missing flag.
+A bare `artenv register <env-name>` on a tty is unchanged — it prompts for
+every field exactly as before.
+
+When it is not a tty, `--version` and `--work` are required (there is nothing
+to prompt); artlogin defaults to single-user unless `--multiuser` is given.
+
 ### 4. Fetch project templates
 
 Fetch the template repositories once so that `artenv new` can scaffold from

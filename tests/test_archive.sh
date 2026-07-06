@@ -210,9 +210,11 @@ test_register_env_all_archived_dies() {
   fake_native_version only
   run archive-version only
   assert_status "${status}" 0
-  run_in "" register-env newenv
+  # Registration must reject an archived version (the flag-path equivalent of
+  # the interactive "all versions are archived" guard).
+  run register-env newenv --version only --work "${ARTENV_ROOT}" --singleuser
   assert_status "${status}" 1
-  assert_contains "${output}" "all versions are archived"
+  assert_contains "${output}" "archived"
 }
 
 test_register_env_select_excludes_archived() {
@@ -220,10 +222,16 @@ test_register_env_select_excludes_archived() {
   fake_native_version hidever
   run archive-version hidever
   assert_status "${status}" 0
-  # feed EOF: register-env shows the version menu then fails on empty work dir.
-  run_in "" register-env newenv
-  assert_contains "${output}" "keepver"
-  assert_not_contains "${output}" "hidever"
+  # An archived version is rejected...
+  run register-env earch --version hidever --work "${ARTENV_ROOT}" --singleuser
+  assert_status "${status}" 1
+  assert_contains "${output}" "archived"
+  # ...while an active version registers fine.
+  run register-env eok --version keepver --work "${ARTENV_ROOT}" --singleuser
+  assert_status "${status}" 0
+  assert_file "${ARTENV_ROOT}/envs/eok.toml"
+  [[ "$(toml_field "${ARTENV_ROOT}/envs/eok.toml" env version)" == "keepver" ]] \
+    || fail "expected env version keepver"
 }
 
 # --- dispatcher exposes the new subcommands ---------------------------------

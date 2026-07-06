@@ -70,8 +70,20 @@ _artenv() {
       fi
       return 0
       ;;
-    register|register-env|register-version)
-      # register takes a new (not-yet-existing) name; offer no completion
+    register|register-env)
+      # `artenv register <new-env> [flags]`. The env name is new (not-yet-
+      # existing) so it gets no completion, but the flags and their values do.
+      if [[ "${words[CURRENT-1]}" == "--version" ]]; then
+        compadd -- "${versions[@]}"
+      elif [[ "${words[CURRENT-1]}" == "--work" || "${words[CURRENT-1]}" == "--repos" ]]; then
+        _files -/
+      elif [[ "${words[CURRENT]}" == -* ]]; then
+        compadd -- --version --work --repos --multiuser --singleuser -h --help
+      fi
+      return 0
+      ;;
+    register-version)
+      # register-version takes a new (not-yet-existing) name; offer no completion
       return 0
       ;;
     remove|archive|unarchive|remove-env|archive-env|unarchive-env|shell|default|info|edit)
