@@ -6,6 +6,20 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 Major versions track broad themes rather than strict per-flag SemVer — see
 [Versioning](README.md#versioning).
 
+## [Unreleased]
+
+### Added
+
+- **`register` flags** — `artenv register <env>` accepts `--version`, `--work`,
+  `--repos`, `--multiuser`, and `--singleuser`, so a whole environment can be
+  registered non-interactively (for HPC/batch jobs and scripting). Any field
+  omitted on a tty still falls back to its interactive prompt, so a bare
+  `artenv register <env>` behaves exactly as before. Additive and fully
+  backward-compatible. The user-facing `--multiuser`/`--singleuser` flags map to
+  the existing `use_artlogin` TOML field (mirroring how `--repos` maps to
+  `git_repos`); `--repos` is stored raw, so a URL stays a URL. When not a tty,
+  `--version` and `--work` are required and artlogin defaults to single-user.
+
 ## [2.2.1] - 2026-07-04
 
 ### Fixed
