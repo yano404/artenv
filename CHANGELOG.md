@@ -6,7 +6,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 Major versions track broad themes rather than strict per-flag SemVer — see
 [Versioning](README.md#versioning).
 
-## [Unreleased]
+## [2.3.0] - 2026-07-07
+
+Hardening for shared, multi-user HPC deployments. This release makes it
+practical to stand up and register multi-user (artlogin) projects
+non-interactively, fixes artlogin under Apptainer, and adds a first-class
+self-update path. Additive and backward compatible.
 
 ### Added
 
@@ -174,6 +179,7 @@ compatible: every old command name still works as a deprecated alias.
 
 - Initial release (symlink-based version/environment management).
 
+[2.3.0]: https://github.com/yano404/artenv/compare/v2.2.1...v2.3.0
 [2.2.1]: https://github.com/yano404/artenv/compare/v2.2.0...v2.2.1
 [2.2.0]: https://github.com/yano404/artenv/compare/v2.1.0...v2.2.0
 [2.1.0]: https://github.com/yano404/artenv/compare/v2.0.0...v2.1.0
