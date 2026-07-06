@@ -77,7 +77,7 @@ test_upgrade_applies_update() {
 
   local after_head tag_commit
   after_head="$(git -C "${ARTENV_ROOT}" rev-parse HEAD)"
-  tag_commit="$(git -C "${ARTENV_ROOT}" rev-parse v1.1.0^{commit})"
+  tag_commit="$(git -C "${ARTENV_ROOT}" rev-parse "v1.1.0^{commit}")"
   [[ "${after_head}" != "${before_head}" ]] || fail "HEAD did not move"
   [[ "${after_head}" == "${tag_commit}" ]] || fail "HEAD is not at v1.1.0 (got ${after_head}, want ${tag_commit})"
 }
