@@ -10,6 +10,19 @@ Major versions track broad themes rather than strict per-flag SemVer — see
 
 ### Added
 
+- **`new --multiuser`** — `artenv new --multiuser <dest> [--repo <repo>] -t
+  <template>` sets up the skeleton for a shared multi-user project in two
+  steps. It creates `<dest>` as an empty, group-shared directory (mode 2770:
+  setgid + group rwx, no world access) and seeds a shared upstream bare git
+  repository (`git init --bare --shared=group`, branch `main`) from the
+  template — the template lands **only** in the repo, never in `<dest>`. The
+  repo defaults to `<dest>/<basename>.git`; `--repo` overrides it and is stored
+  raw. This mode does **not** register an environment, create versions, or run
+  artlogin — it prints the exact `artenv register ... --multiuser` command to
+  run next. MVP is local bare only: a URL/scp-like `--repo` is rejected. `-t`
+  is required in multiuser mode; `--repo` is only valid with `--multiuser`.
+  Additive and non-breaking (no schema, register, or artlogin changes); plain
+  `artenv new <dir>` is unchanged.
 - **`register` flags** — `artenv register <env>` accepts `--version`, `--work`,
   `--repos`, `--multiuser`, and `--singleuser`, so a whole environment can be
   registered non-interactively (for HPC/batch jobs and scripting). Any field
