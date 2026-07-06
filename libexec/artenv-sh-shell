@@ -123,6 +123,8 @@ activate_apptainer() {
   local git_repos="$4"
   local image="$5"
   local binds="$6"
+  local use_artlogin="$7"
+  local artlogin_sh="$8"
 
   print_export "ART_PROJECT" "${env}"
   print_export "ART_VERSION" "${art_version}"
@@ -131,10 +133,25 @@ activate_apptainer() {
   print_export "ART_ANALYSIS_DIR" "${work_dir}"
   print_export "ART_WORK_DIR" "${work_dir}"
   print_export "ART_REPOS" "${git_repos}"
-  print_export "USE_ARTLOGIN" "NO"
 
   printf 'alias acd=%q\n' "cd ${work_dir}"
   printf 'type artlogin &>/dev/null && unset -f artlogin\n'
+
+  # artlogin clones $ART_REPOS into $ART_ANALYSIS_DIR/user/<name> on the HOST;
+  # the container wrappers below bind ${work_dir} (the shared parent), so that
+  # per-user subdir is under a bound path. Mirror the native path here rather
+  # than forcing USE_ARTLOGIN=NO.
+  if [[ "${use_artlogin}" == "YES" ]]; then
+    print_export "USE_ARTLOGIN" "YES"
+    printf 'artlogin() {\n'
+    # shellcheck disable=SC2016
+    printf '  . %q "$1"\n' "${artlogin_sh}"
+    # shellcheck disable=SC2016
+    printf '  alias acd=%q\n' 'cd $ART_WORK_DIR'
+    printf '}\n'
+  else
+    print_export "USE_ARTLOGIN" "NO"
+  fi
 
   local bind_str="${work_dir}"
   if [[ -n "${binds}" ]]; then
@@ -170,7 +187,9 @@ main() {
       "${ENV_WORK_DIR}" \
       "${ENV_GIT_REPOS}" \
       "${ENV_APPTAINER_IMAGE}" \
-      "${ENV_BINDS}"
+      "${ENV_BINDS}" \
+      "${ENV_USE_ARTLOGIN}" \
+      "${ENV_ARTLOGIN_SH}"
   else
     activate_native \
       "${env}" \

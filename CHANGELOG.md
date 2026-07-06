@@ -33,6 +33,17 @@ Major versions track broad themes rather than strict per-flag SemVer — see
   `git_repos`); `--repos` is stored raw, so a URL stays a URL. When not a tty,
   `--version` and `--work` are required and artlogin defaults to single-user.
 
+### Fixed
+
+- **`artlogin` in Apptainer environments** — `artenv shell` on an Apptainer
+  environment previously hard-coded `USE_ARTLOGIN=NO` and never defined the
+  `artlogin` function, so a multi-user environment backed by an Apptainer image
+  had no `artlogin` (`command not found`). It now mirrors the native path:
+  `use_artlogin=true` Apptainer environments export `USE_ARTLOGIN=YES` and define
+  `artlogin`; `use_artlogin=false`/absent are unchanged. (artlogin runs on the
+  host and the container wrappers bind the shared work directory, so the
+  per-user clone it creates is visible inside the container.)
+
 ## [2.2.1] - 2026-07-04
 
 ### Fixed
