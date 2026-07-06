@@ -133,9 +133,10 @@ test_new_multiuser_missing_dest() {
 # --- 7: -t missing -----------------------------------------------------------
 
 test_new_multiuser_missing_template() {
+  # Non-tty without -t dies (on a tty it would prompt to select a template).
   run new --multiuser "${ARTENV_ROOT}/proj"
   assert_status "${status}" 1
-  assert_contains "${output}" "requires -t"
+  assert_contains "${output}" "not a tty"
 }
 
 # --- 8: --repo without --multiuser ------------------------------------------

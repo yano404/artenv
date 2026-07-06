@@ -23,12 +23,40 @@ Modes:
                           ONLY in the repo, not in <dest>.
 
 Options:
-  -t, --template [<repo>/]<name>   Template to use (required with --multiuser)
+  -t, --template [<repo>/]<name>   Template to use (prompted if omitted on a tty)
       --multiuser                  Multi-user skeleton mode
       --repo <repo>                Upstream repo location (multiuser; local path
                                    only). Default <dest>/<basename>.git
   -h, --help                       Show this help
 EOS
+}
+
+# Resolve the template into template_path: the -t flag wins; else on a tty offer
+# an interactive select; else die. Reads have_template/template_spec/
+# templates_root and sets template_path (all main()'s locals via dynamic scope).
+resolve_selected_template() {
+  if [[ "${have_template}" -eq 1 ]]; then
+    resolve_template "${template_spec}"
+    template_path="${RESOLVED_TEMPLATE_PATH}"
+    return
+  fi
+  if [[ -t 0 && -t 1 ]]; then
+    local -a choices=()
+    mapfile -t choices < <(list_templates)
+    [[ ${#choices[@]} -gt 0 ]] || die "no templates available (run \`artenv templates update')"
+    echo "Select the template"
+    local choice=""
+    select choice in "${choices[@]}"; do
+      if [[ -n "${choice:-}" ]]; then
+        break
+      else
+        echo "Wrong selection"
+      fi
+    done
+    template_path="${templates_root}/${choice}"
+    return
+  fi
+  die "no template specified and not a tty; use -t <template>"
 }
 
 main() {
@@ -63,14 +91,14 @@ main() {
 
   # --- multiuser skeleton mode ----------------------------------------------
   if [[ "${multiuser}" -eq 1 ]]; then
-    [[ -n "${dir}" ]]              || die "artenv new --multiuser requires a shared directory: artenv new --multiuser <dest> -t <template>"
-    [[ "${have_template}" -eq 1 ]] || die "artenv new --multiuser requires -t <template>"
+    [[ -n "${dir}" ]] || die "artenv new --multiuser requires a shared directory: artenv new --multiuser <dest> -t <template>"
     if [[ "${have_repo}" -eq 1 ]] && dest_is_remote "${repo_dest}"; then
       die "remote destinations are not yet supported; use a local path"
     fi
 
-    resolve_template "${template_spec}"
-    template_path="${RESOLVED_TEMPLATE_PATH}"
+    # -t wins; on a tty prompt to select; non-tty without -t dies (mirrors
+    # scaffold mode).
+    resolve_selected_template
 
     local dest repo rel
     dest="$(resolve_path "${dir}")"
@@ -113,26 +141,7 @@ main() {
   fi
   [[ -n "${dir}" ]] || { usage >&2; exit 1; }
 
-  if [[ "${have_template}" -eq 1 ]]; then
-    resolve_template "${template_spec}"
-    template_path="${RESOLVED_TEMPLATE_PATH}"
-  elif [[ -t 0 && -t 1 ]]; then
-    local -a choices=()
-    mapfile -t choices < <(list_templates)
-    [[ ${#choices[@]} -gt 0 ]] || die "no templates available (run \`artenv templates update')"
-    echo "Select the template"
-    local choice=""
-    select choice in "${choices[@]}"; do
-      if [[ -n "${choice:-}" ]]; then
-        break
-      else
-        echo "Wrong selection"
-      fi
-    done
-    template_path="${templates_root}/${choice}"
-  else
-    die "no template specified and not a tty; use -t <template>"
-  fi
+  resolve_selected_template
 
   local target
   target="$(resolve_path "${dir}")"
