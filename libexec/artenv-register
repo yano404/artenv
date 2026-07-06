@@ -8,20 +8,48 @@ source "${script_dir}/util.sh"
 
 usage() {
   cat <<'EOS'
-usage: artenv register <env>
+usage: artenv register <env> [options]
 
-Register a new environment interactively.
+Register a new environment. With all fields supplied via flags the command is
+fully non-interactive; on a tty, any omitted field falls back to a prompt.
 
 Options:
-  -h, --help    Show this help
+  --version <version>   Artemis version to use (must be registered, not archived)
+  --work <dir>          Path to the working directory (must exist)
+  --repos <url|path>    git repos location (required with --multiuser)
+  --multiuser           Multi-user env: enable artlogin (use_artlogin = true)
+  --singleuser          Single-user env: disable artlogin (use_artlogin = false)
+  -h, --help            Show this help
 EOS
 }
 
 main() {
   local env_name=""
+  local version_flag="" have_version=0
+  local work_flag=""    have_work=0
+  local repos_flag=""   have_repos=0
+  local want_multiuser=0 want_singleuser=0
+
   while [[ $# -gt 0 ]]; do
     case "$1" in
       -h|--help) usage; exit 0 ;;
+      --version)
+        [[ $# -ge 2 ]] || die "option $1 requires an argument"
+        version_flag="$2"; have_version=1; shift 2 ;;
+      --version=*)
+        version_flag="${1#*=}"; have_version=1; shift ;;
+      --work)
+        [[ $# -ge 2 ]] || die "option $1 requires an argument"
+        work_flag="$2"; have_work=1; shift 2 ;;
+      --work=*)
+        work_flag="${1#*=}"; have_work=1; shift ;;
+      --repos)
+        [[ $# -ge 2 ]] || die "option $1 requires an argument"
+        repos_flag="$2"; have_repos=1; shift 2 ;;
+      --repos=*)
+        repos_flag="${1#*=}"; have_repos=1; shift ;;
+      --multiuser)  want_multiuser=1; shift ;;
+      --singleuser) want_singleuser=1; shift ;;
       -*)        die "unknown option: $1" ;;
       *)
         [[ -z "${env_name}" ]] || die "usage: artenv register <env>"
@@ -41,7 +69,7 @@ main() {
 
   local work=""
   local git_repos=""
-  local use_artlogin=""
+  local use_ml=""
   local version_name=""
 
   [[ -n "${env_name}" ]] || die "environment name is empty"
@@ -51,64 +79,108 @@ main() {
 
   require_dir "${versions_dir}"
 
-  local -a version_names=()
-  local conf_file
-  local total_versions=0
+  local is_tty=0
+  [[ -t 0 && -t 1 ]] && is_tty=1
 
-  shopt -s nullglob
-  for conf_file in "${versions_dir}"/*.toml; do
-    local name
-    name="$(basename "${conf_file}" .toml)"
-    total_versions=$((total_versions + 1))
-    # Archived versions are hidden from new-env selection.
-    [[ "$(toml_get "${conf_file}" version archived false)" == "true" ]] && continue
-    version_names+=("${name}")
-  done
-  shopt -u nullglob
-
-  if [[ ${#version_names[@]} -eq 0 ]]; then
-    if [[ ${total_versions} -gt 0 ]]; then
-      die "all versions are archived; unarchive one first"
+  # --- version --------------------------------------------------------------
+  if [[ "${have_version}" -eq 1 ]]; then
+    version_name="${version_flag}"
+    [[ -n "${version_name}" ]] || die "version name is empty"
+    [[ "${version_name}" != */* ]] || die "version name must not contain /"
+    [[ "${version_name}" != "." && "${version_name}" != ".." ]] || die "invalid version name"
+    local version_conf="${versions_dir}/${version_name}.toml"
+    [[ -f "${version_conf}" ]] || die "version not found: ${version_name}"
+    if [[ "$(toml_get "${version_conf}" version archived false)" == "true" ]]; then
+      die "version is archived: ${version_name} (unarchive it first)"
     fi
-    die "no artemis versions are registered"
+  elif [[ "${is_tty}" -eq 1 ]]; then
+    local -a version_names=()
+    local conf_file
+    local total_versions=0
+
+    shopt -s nullglob
+    for conf_file in "${versions_dir}"/*.toml; do
+      local name
+      name="$(basename "${conf_file}" .toml)"
+      total_versions=$((total_versions + 1))
+      # Archived versions are hidden from new-env selection.
+      [[ "$(toml_get "${conf_file}" version archived false)" == "true" ]] && continue
+      version_names+=("${name}")
+    done
+    shopt -u nullglob
+
+    if [[ ${#version_names[@]} -eq 0 ]]; then
+      if [[ ${total_versions} -gt 0 ]]; then
+        die "all versions are archived; unarchive one first"
+      fi
+      die "no artemis versions are registered"
+    fi
+
+    echo "Select the artemis version"
+    select version_name in "${version_names[@]}"; do
+      if [[ -n "${version_name:-}" ]]; then
+        break
+      else
+        echo "Wrong selection"
+      fi
+    done
+    # `select` falls through with no selection when stdin reaches EOF
+    # (non-interactive / Ctrl-D); abort cleanly instead of proceeding empty.
+    [[ -n "${version_name:-}" ]] || die "aborted"
+
+    echo "${version_name} was selected"
+  else
+    die "no artemis version specified and not a tty; use --version <version>"
   fi
 
-  echo "Select the artemis version"
-  select version_name in "${version_names[@]}"; do
-    if [[ -n "${version_name:-}" ]]; then
-      break
-    else
-      echo "Wrong selection"
-    fi
-  done
-  # `select` falls through with no selection when stdin reaches EOF
-  # (non-interactive / Ctrl-D); abort cleanly instead of proceeding empty.
-  [[ -n "${version_name:-}" ]] || die "aborted"
-
-  echo "${version_name} was selected"
-
-  read -e -r -p "Enter the path to working directory> " work || die "aborted"
+  # --- work -----------------------------------------------------------------
+  if [[ "${have_work}" -eq 1 ]]; then
+    work="${work_flag}"
+  elif [[ "${is_tty}" -eq 1 ]]; then
+    read -e -r -p "Enter the path to working directory> " work || die "aborted"
+  else
+    die "no working directory specified and not a tty; use --work <dir>"
+  fi
   require_dir "${work}"
   work="$(resolve_path "${work}")"
 
-  while true; do
-    read -e -r -p "Use artlogin? (y/n)> " use_artlogin || die "aborted"
-    case "${use_artlogin}" in
-      y|Y)
-        require_file "${template_artlogin}"
-        read -e -r -p "Enter the path to git repos (required)> " git_repos || die "aborted"
-        [[ -n "${git_repos}" ]] || die "git repos is required when artlogin is enabled"
-        break
-        ;;
-      n|N)
-        read -e -r -p "Enter the path to git repos (optional)> " git_repos || die "aborted"
-        break
-        ;;
-      *)
-        echo "Please answer y or n"
-        ;;
-    esac
-  done
+  # --- multiuser / artlogin (normalize to boolean use_ml) -------------------
+  if [[ "${want_multiuser}" -eq 1 && "${want_singleuser}" -eq 1 ]]; then
+    die "--multiuser and --singleuser are mutually exclusive"
+  elif [[ "${want_multiuser}" -eq 1 ]]; then
+    use_ml=true
+  elif [[ "${want_singleuser}" -eq 1 ]]; then
+    use_ml=false
+  elif [[ "${is_tty}" -eq 1 ]]; then
+    local answer=""
+    while true; do
+      read -e -r -p "Use artlogin? (y/n)> " answer || die "aborted"
+      case "${answer}" in
+        y|Y) use_ml=true;  break ;;
+        n|N) use_ml=false; break ;;
+        *)   echo "Please answer y or n" ;;
+      esac
+    done
+  else
+    use_ml=false
+  fi
+
+  # --- repos ----------------------------------------------------------------
+  if [[ "${have_repos}" -eq 1 ]]; then
+    # Stored raw: a git repos value may be a URL and must stay a URL.
+    git_repos="${repos_flag}"
+  elif [[ "${is_tty}" -eq 1 ]]; then
+    if [[ "${use_ml}" == "true" ]]; then
+      read -e -r -p "Enter the path to git repos (required)> " git_repos || die "aborted"
+    else
+      read -e -r -p "Enter the path to git repos (optional)> " git_repos || die "aborted"
+    fi
+  fi
+
+  if [[ "${use_ml}" == "true" ]]; then
+    require_file "${template_artlogin}"
+    [[ -n "${git_repos}" ]] || die "git repos is required when artlogin is enabled"
+  fi
 
   ensure_dir "${ARTENV_ROOT}/envs"
 
@@ -125,7 +197,7 @@ main() {
     if [[ -n "${git_repos:-}" ]]; then
       printf 'git_repos = "%s"\n' "${git_repos}"
     fi
-    if [[ "${use_artlogin}" == "y" || "${use_artlogin}" == "Y" ]]; then
+    if [[ "${use_ml}" == "true" ]]; then
       printf 'use_artlogin = true\n'
     else
       printf 'use_artlogin = false\n'
@@ -135,7 +207,7 @@ main() {
   mv -- "${tmp_conf}" "${env_conf}"
   trap - EXIT
 
-  if [[ "${use_artlogin}" == "y" || "${use_artlogin}" == "Y" ]]; then
+  if [[ "${use_ml}" == "true" ]]; then
     cp -- "${template_artlogin}" "${ARTENV_ROOT}/envs/${env_name}.artlogin.sh"
   fi
 
