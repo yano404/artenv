@@ -39,6 +39,11 @@ yamlcmake = "/tmp/x/yaml/cmake"
 EOF
 }
 
+fake_artlogin_template() {
+  mkdir -p "${ARTENV_ROOT}/libexec"
+  printf '#seed\n' > "${ARTENV_ROOT}/libexec/artlogin.sh"
+}
+
 apptainer_version_managed() { # <name>  (SIF placed under images/)
   touch "${ARTENV_ROOT}/images/$1.sif"
   cat > "${ARTENV_ROOT}/versions/$1.toml" <<EOF
@@ -83,8 +88,20 @@ EOF
 }
 
 # Read a scalar field straight from a TOML file (test-side, via yq).
+# Mirrors util.sh's toml_get: the plain `//` fallback would collapse an
+# explicit `false` (or `null`) to the default, so branch on key presence
+# instead of relying on jq/yq truthiness.
 toml_field() { # <file> <section> <key>
-  yq -p toml -oy -r ".$2.$3 // \"\"" "$1"
+  local file="$1" section="$2" key="$3"
+  local out present value
+  out="$(yq -p toml -oy -r "((.${section} // {}) | has(\"${key}\")), (.${section}.${key})" "${file}")"
+  present="${out%%$'\n'*}"
+  value="${out#*$'\n'}"
+  if [[ "${present}" == "true" ]]; then
+    printf '%s\n' "${value}"
+  else
+    printf '%s\n' ""
+  fi
 }
 
 make_env() { # <name> <version> [artlogin:true|false]
