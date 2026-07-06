@@ -36,18 +36,22 @@ test_register_eof_version_apptainer_read() {
 
 test_register_eof_env_select() {
   fake_native_version v1
+  # env register is flag-driven now: a non-tty invocation without --version dies
+  # helpfully (no crash / unbound variable) instead of running an interactive
+  # select that would EOF.
   run_in "" register newenv
   assert_status "${status}" 1
-  assert_contains "${output}" "aborted"
+  assert_contains "${output}" "use --version"
   assert_not_contains "${output}" "unbound variable"
 }
 
 test_register_eof_env_read() {
   fake_native_version v1
-  # Select v1, then EOF at the working-directory `read`.
-  run_in $'1\n' register newenv
+  # Version supplied via flag; a missing --work on a non-tty dies naming --work
+  # rather than falling into the working-directory prompt.
+  run register newenv --version v1
   assert_status "${status}" 1
-  assert_contains "${output}" "aborted"
+  assert_contains "${output}" "use --work"
   assert_not_contains "${output}" "unbound variable"
 }
 
@@ -64,12 +68,14 @@ test_register_eof_no_leftover_temp() {
 }
 
 test_register_eof_shim_inheritance() {
-  # Deprecated shims exec the canonical commands, so they abort cleanly too.
+  # Deprecated shims exec the canonical commands.
   fake_native_version v1
+  # version register stays interactive: EOF aborts cleanly.
   run_in "" register-version newname
   assert_status "${status}" 1
   assert_contains "${output}" "aborted"
+  # env register is flag-driven: non-tty without --version dies helpfully.
   run_in "" register-env newenv
   assert_status "${status}" 1
-  assert_contains "${output}" "aborted"
+  assert_contains "${output}" "use --version"
 }
