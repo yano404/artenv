@@ -63,10 +63,15 @@ _artenv() {
       return 0
       ;;
     new)
-      # complete template names right after -t/--template
+      # complete template names after -t/--template; dirs after --repo; flags
+      # when the current word starts with a dash.
       if [[ "${words[CURRENT-1]}" == "-t" || "${words[CURRENT-1]}" == "--template" ]]; then
         templates=("${(@f)$(_artenv_list_templates)}")
         compadd -- "${templates[@]}"
+      elif [[ "${words[CURRENT-1]}" == "--repo" ]]; then
+        _files -/
+      elif [[ "${words[CURRENT]}" == -* ]]; then
+        compadd -- -t --template --multiuser --repo -h --help
       fi
       return 0
       ;;

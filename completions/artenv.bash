@@ -68,9 +68,14 @@ _artenv_completion() {
       return 0
       ;;
     new)
-      # complete template names right after -t/--template
+      # complete template names after -t/--template; dirs after --repo; flags
+      # when the current word starts with a dash.
       if [[ "${prev}" == "-t" || "${prev}" == "--template" ]]; then
         COMPREPLY=( $(compgen -W "$(_artenv_list_templates)" -- "${cur}") )
+      elif [[ "${prev}" == "--repo" ]]; then
+        COMPREPLY=( $(compgen -d -- "${cur}") )
+      elif [[ "${cur}" == -* ]]; then
+        COMPREPLY=( $(compgen -W "-t --template --multiuser --repo -h --help" -- "${cur}") )
       else
         COMPREPLY=()
       fi

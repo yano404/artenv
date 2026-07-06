@@ -169,6 +169,7 @@ typed directly:
 - `info [env]`                 : Print the detail information of an environment
 - `edit [env]`                 : Open an environment's config in $EDITOR
 - `new <dir> [-t <template>]`  : Create a working directory from a template
+- `new --multiuser <dest> [--repo <repo>] -t <template>` : Set up a shared multi-user project skeleton (see [Multi-user projects](#multi-user-projects-artenv-new---multiuser))
 - `shell [env]`                : Set or show the activated environment in the current shell
 - `default [env]`              : Set or show the default environment
 
@@ -457,6 +458,51 @@ fetched, updated, or removed by artenv.
 > runtime data and are gitignored. `template-repos/default.toml` is seeded on
 > first run from the bundled `share/template-repos/default.toml`, so editing it
 > never dirties the working tree or conflicts on upgrade.
+
+### Multi-user projects (`artenv new --multiuser`)
+
+For a project shared by several users, `artenv new --multiuser` sets up the
+skeleton: an empty, group-shared analysis directory plus a seeded upstream git
+repository that everyone clones from. It is a **two-step** flow — `new
+--multiuser` does *not* register an environment; it prints the `register`
+command to run next.
+
+**Step 1 — create the shared skeleton:**
+
+```sh
+artenv new --multiuser /shared/myproject -t default/standard
+```
+
+This creates two artifacts:
+
+- **`/shared/myproject`** — an empty directory with mode `2770` (setgid +
+  group `rwx`, no world access). The setgid bit means files created inside
+  inherit the directory's group, so collaborators can read and write each
+  other's work; set your `umask` to `007` (or `002`) so new files stay
+  group-writable. The directory must be absent or empty beforehand — `artenv`
+  refuses a non-empty target. **The template does not go here.**
+- **the upstream repo** — a bare repository created with
+  `git init --bare --shared=group` on branch `main`, seeded from the template.
+  It defaults to `/shared/myproject/myproject.git`; pass `--repo <path>` to put
+  it elsewhere. **The template lands only in this repo.**
+
+MVP is **local bare repositories only**: a `--repo` that looks like a URL or an
+`scp`-style `user@host:path` destination is rejected with "remote destinations
+are not yet supported; use a local path". `-t <template>` is required in
+multiuser mode.
+
+**Step 2 — register an environment** pointing `--work` at the shared directory
+and `--repos` at the upstream repo (the command is printed for you):
+
+```sh
+artenv register myproject --version <version> \
+  --work /shared/myproject --repos /shared/myproject/myproject.git --multiuser
+```
+
+**Step 3 — each user logs in.** With the multi-user (artlogin) environment
+active, `artlogin <name>` clones the upstream repo into a per-user subdirectory
+of the shared directory, so everyone works from their own checkout of the same
+history.
 
 ## Configuration Files
 
