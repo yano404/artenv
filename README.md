@@ -199,6 +199,7 @@ Utility commands:
 - `init`                       : Configure the shell environment for artenv
 - `doctor [env|--all|--orphans]` : Diagnose environments / scan store health
 - `migrate`                    : Migrate v1 (symlink) data to v2 (TOML)
+- `upgrade`                    : Update artenv itself to the latest release (see [Upgrading](#upgrading))
 - `commands`                   : List all available commands
 - `--version`                  : Show the version of artenv
 
@@ -574,6 +575,42 @@ version = "artemis-apptainer"
 work = "/path/to/work"
 binds = ["/extra/path1", "/extra/path2"]
 ```
+
+## Upgrading
+
+To update artenv itself to the latest release, run:
+
+```sh
+artenv upgrade
+```
+
+This fetches tags from the remote and checks out the newest `vX.Y.Z` tag,
+leaving the checkout on a **detached HEAD** at that tag — this is normal and
+expected.
+
+Only artenv's tracked core files are updated. All runtime data — `versions/`,
+`envs/`, `env`, `templates/`, `template-repos/`, `images/` — is gitignored and
+never touched. Thanks to the seed pattern, even `template-repos/default.toml` is
+untracked (the bundled copy lives at `share/template-repos/default.toml` and is
+copied into place on first run), so as long as you have not hand-edited any
+tracked core file, `artenv upgrade` updates cleanly.
+
+`artenv upgrade` never stashes. If you have local changes to tracked files it
+fails fast rather than touching your edits. To upgrade anyway, stash them first
+and reapply afterwards:
+
+```sh
+git -C "$ARTENV_ROOT" stash
+artenv upgrade
+git -C "$ARTENV_ROOT" stash pop
+```
+
+(This is the general form of the `git pull` conflict note from the v2.2.1
+upgrade instructions.)
+
+In an Apptainer setup, `artenv upgrade` updates only the artenv code. It does
+**not** re-pull container images; update those separately with
+`artenv version install --update <version>`.
 
 ## Versioning
 

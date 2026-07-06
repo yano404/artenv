@@ -29,6 +29,7 @@ Utility commands:
   init              Configure the shell environment for artenv
   doctor            Diagnose a registered environment
   migrate           Migrate v1 (symlink) data to v2 (TOML)
+  upgrade           Update artenv to the latest release
   commands          List all available commands
   --version         Show the version of artenv
 

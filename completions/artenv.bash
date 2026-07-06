@@ -116,6 +116,10 @@ _artenv_completion() {
       COMPREPLY=( $(compgen -W "--native --apptainer --update --list -l --help -h" -- "${cur}") )
       return 0
       ;;
+    upgrade)
+      COMPREPLY=( $(compgen -W "-h --help" -- "${cur}") )
+      return 0
+      ;;
     *)
       COMPREPLY=()
       return 0

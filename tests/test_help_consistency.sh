@@ -35,6 +35,7 @@ _HELP_COMMANDS=(
   "templates repos"
   "templates update"
   "init"
+  "upgrade"
 )
 
 # Data-driven: for every command, both -h and --help must exit 0 and render

@@ -10,6 +10,14 @@ Major versions track broad themes rather than strict per-flag SemVer — see
 
 ### Added
 
+- **`upgrade`** — `artenv upgrade` updates artenv itself to the latest released
+  version by fetching tags and checking out the newest `vX.Y.Z` tag from the
+  remote (leaving the checkout on a detached HEAD at the tag, which is normal).
+  Only tracked core files are updated; runtime data (versions/envs/templates/…)
+  is gitignored and never touched. It never stashes: if you have local changes
+  to tracked files it fails fast and tells you to commit/stash/reset first. It
+  refuses to roll back when the checkout is already at or ahead of the latest
+  release (e.g. a developer on `develop`).
 - **`new --multiuser`** — `artenv new --multiuser <dest> [--repo <repo>] -t
   <template>` sets up the skeleton for a shared multi-user project in two
   steps. It creates `<dest>` as an empty, group-shared directory (mode 2770:
