@@ -118,8 +118,12 @@ test_yq_resolve_rejects_pypi_yq() {
 # 4. Happy path: fetch -> verify -> atomic install, then a real round-trip
 #    (the installed binary parses TOML through the normal command surface).
 test_yq_bootstrap_happy_path() {
-  local dest
-  dest="$(stage_yq_mirror)"
+  local dest="${ARTENV_ROOT}/vendor/bin/yq"
+  # NOTE: call stage_yq_mirror as a plain statement, never via `$(...)` --
+  # capturing it forks a subshell, and stage_yq_mirror's `export`s of
+  # ARTENV_YQ_BASE_URL/ARTENV_YQ_SHA256_<arch> would then never reach this
+  # shell, silently falling through to the real github.com default.
+  stage_yq_mirror >/dev/null
 
   run bootstrap
   assert_status "${status}" 0
@@ -141,8 +145,9 @@ test_yq_bootstrap_happy_path() {
 
 # 5. Idempotent: a second bootstrap (no --force) is a clean no-op success.
 test_yq_bootstrap_idempotent() {
-  local dest
-  dest="$(stage_yq_mirror)"
+  local dest="${ARTENV_ROOT}/vendor/bin/yq"
+  # See test_yq_bootstrap_happy_path: must not be `dest="$(stage_yq_mirror)"`.
+  stage_yq_mirror >/dev/null
 
   run bootstrap
   assert_status "${status}" 0
@@ -153,8 +158,10 @@ test_yq_bootstrap_idempotent() {
 
 # 6. Checksum mismatch: temp is discarded and nothing is installed.
 test_yq_bootstrap_sha_mismatch_dies() {
-  local dest arch
-  dest="$(stage_yq_mirror)"
+  local dest="${ARTENV_ROOT}/vendor/bin/yq"
+  local arch
+  # See test_yq_bootstrap_happy_path: must not be `dest="$(stage_yq_mirror)"`.
+  stage_yq_mirror >/dev/null
   arch="$(_yq_test_arch)"
   export "ARTENV_YQ_SHA256_${arch}=deadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeef"
 
