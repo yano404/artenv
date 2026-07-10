@@ -36,6 +36,7 @@ _HELP_COMMANDS=(
   "templates update"
   "init"
   "upgrade"
+  "bootstrap"
 )
 
 # Data-driven: for every command, both -h and --help must exit 0 and render

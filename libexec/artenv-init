@@ -2,6 +2,10 @@
 
 set -euo pipefail
 
+script_dir="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
+# shellcheck source=/dev/null
+source "${script_dir}/util.sh"
+
 function usage() {
     cat << 'EOS'
 # Load artenv automatically by appending the following to your
@@ -41,10 +45,20 @@ function main() {
       fi
     fi
 
+    # One-line hint (stderr only -- stdout is eval'd by the shell) when no usable
+    # yq is resolvable yet. resolve_yq is filesystem-only + at most one local
+    # `--version`; it never does network I/O and never blocks the login.
+    if ! resolve_yq 2>/dev/null; then
+        printf "artenv: yq not found; run 'artenv bootstrap' on a login node to vendor it\n" >&2
+    fi
+
     if [[ -f "${ARTENV_ROOT}/env" ]]; then
         local env
         env="$(< "${ARTENV_ROOT}/env")"
         if [[ -n "${env}" ]]; then
+            # Never trigger a network auto-bootstrap during shell startup; the
+            # hint above already told the user what to do.
+            export ARTENV_NO_AUTO_BOOTSTRAP=1
             # shellcheck source=/dev/null
             source artenv-sh-shell "${env}"
         fi

@@ -139,9 +139,30 @@ doctor_current() {
 # Store-wide orphan scan: surfaces orphaned resources left behind by
 # remove/archive operations. Reports only problems; a clean store prints
 # "[OK] none" per section. Returns non-zero if any issue is found.
+# Report which yq is in use (the pinned vendored binary vs a system yq) and its
+# version. yq is a hard dependency -- main() has already resolved it via
+# require_yq -- so this is informational and always OK here; a genuinely missing
+# yq is reported earlier by require_yq's actionable die.
+doctor_yq() {
+  local ver kind
+  ver="$("${ARTENV_YQ}" --version 2>/dev/null || true)"
+  ver="${ver##* }"          # trailing token, e.g. "v4.47.1"
+  [[ -n "${ver}" ]] || ver="unknown"
+  if [[ "${ARTENV_YQ}" == "${ARTENV_ROOT}/vendor/bin/yq" ]]; then
+    kind="vendored"
+  else
+    kind="system"
+  fi
+  print_ok "yq: ${kind} ${ver} (${ARTENV_YQ})"
+}
+
 doctor_orphans() {
   local issues=0
   printf 'orphan scan: store-wide checks\n\n'
+
+  printf 'yq:\n'
+  doctor_yq
+  printf '\n'
 
   # 1. Orphan SIF images: *.sif under images/ not referenced by any version.
   printf 'orphan images (unreferenced .sif under images/):\n'
