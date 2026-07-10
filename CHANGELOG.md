@@ -6,6 +6,15 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 Major versions track broad themes rather than strict per-flag SemVer — see
 [Versioning](README.md#versioning).
 
+## [2.3.1] - 2026-07-10
+
+### Fixed
+
+- `artenv edit` was missing from the `artenv -h` command listing, even though
+  it is a working command (present in `artenv commands` and `artenv version
+  help`). It is now listed under Environment commands, and `edit` was added to
+  the Version commands summary line. Docs-only; no behavior change. (#53)
+
 ## [2.3.0] - 2026-07-07
 
 Hardening for shared, multi-user HPC deployments. This release makes it
@@ -179,6 +188,7 @@ compatible: every old command name still works as a deprecated alias.
 
 - Initial release (symlink-based version/environment management).
 
+[2.3.1]: https://github.com/yano404/artenv/compare/v2.3.0...v2.3.1
 [2.3.0]: https://github.com/yano404/artenv/compare/v2.2.1...v2.3.0
 [2.2.1]: https://github.com/yano404/artenv/compare/v2.2.0...v2.2.1
 [2.2.0]: https://github.com/yano404/artenv/compare/v2.1.0...v2.2.0
