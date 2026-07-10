@@ -106,6 +106,146 @@ require_yq() {
   die "yq (mikefarah v4+) is required. On a login node with network access run 'artenv bootstrap' to vendor a pinned yq, or manually place a yq binary at ${ARTENV_ROOT:-\$ARTENV_ROOT}/vendor/bin/yq"
 }
 
+# --- yq vendoring (bootstrap) ----------------------------------------------
+# Fetch a pinned, statically-linked mikefarah/yq (a Go binary, glibc-independent
+# -> portable across HPC nodes) and install it under $ARTENV_ROOT/vendor/bin/yq.
+# Bump the version and the matching per-arch SHA-256 pins together.
+ARTENV_YQ_VERSION="v4.47.1"
+
+# Overridable seams. ARTENV_YQ_BASE_URL lets a mirror (or the offline test
+# harness) redirect the download; the SHA-256 pins are likewise env-overridable
+# so the test harness can verify a locally-staged asset; the timeouts bound
+# curl/wget so a fetch can never hang.
+: "${ARTENV_YQ_SHA256_amd64:=0fb28c6680193c41b364193d0c0fc4a03177aecde51cfc04d506b1517158c2fb}"
+: "${ARTENV_YQ_SHA256_arm64:=b7f7c991abe262b0c6f96bbcb362f8b35429cefd59c8b4c2daa4811f1e9df599}"
+: "${ARTENV_YQ_BASE_URL:=https://github.com/mikefarah/yq/releases/download}"
+: "${ARTENV_YQ_CONNECT_TIMEOUT:=10}"
+: "${ARTENV_YQ_MAX_TIME:=120}"
+
+# Map `uname -m` to mikefarah's asset arch suffix, or die on an unsupported one.
+yq_asset_arch() {
+  local machine
+  machine="$(uname -m)"
+  case "${machine}" in
+    x86_64|amd64)  printf 'amd64\n' ;;
+    aarch64|arm64) printf 'arm64\n' ;;
+    *) die "unsupported architecture for vendored yq: ${machine} (install yq manually to ${ARTENV_ROOT:-\$ARTENV_ROOT}/vendor/bin/yq)" ;;
+  esac
+}
+
+# Return 0 if the download base looks reachable, without ever hanging. A local
+# mirror (file:// or an absolute path) is always "reachable". For http(s) it
+# issues a strictly time-bounded HEAD; any HTTP response (even a 404) proves
+# reachability, so `-f` is intentionally omitted here.
+yq_net_reachable() {
+  local base="${ARTENV_YQ_BASE_URL%/}/"
+  case "${base}" in
+    file://*|/*) return 0 ;;
+  esac
+  if command -v curl >/dev/null 2>&1; then
+    if curl -sS -I --connect-timeout "${ARTENV_YQ_CONNECT_TIMEOUT}" \
+         --max-time "${ARTENV_YQ_MAX_TIME}" -o /dev/null "${base}" 2>/dev/null; then
+      return 0
+    fi
+    return 1
+  fi
+  if command -v wget >/dev/null 2>&1; then
+    if wget -q --spider "--connect-timeout=${ARTENV_YQ_CONNECT_TIMEOUT}" \
+         "--timeout=${ARTENV_YQ_MAX_TIME}" "${base}" 2>/dev/null; then
+      return 0
+    fi
+    return 1
+  fi
+  return 1
+}
+
+# Download <url> to <out> without ever blocking on a prompt or hanging. Local
+# mirrors (file:// or an absolute path) are copied directly for CI portability
+# (curl's file:// support varies); http(s) uses curl then wget, both bounded by
+# connect + total timeouts. Returns non-zero on failure.
+yq_download() {
+  local url="$1" out="$2"
+
+  case "${url}" in
+    file://*) cp -- "${url#file://}" "${out}"; return ;;
+    /*)       cp -- "${url}" "${out}";         return ;;
+  esac
+
+  if command -v curl >/dev/null 2>&1; then
+    curl -fsSL --connect-timeout "${ARTENV_YQ_CONNECT_TIMEOUT}" \
+      --max-time "${ARTENV_YQ_MAX_TIME}" -o "${out}" "${url}"
+    return
+  fi
+  if command -v wget >/dev/null 2>&1; then
+    wget -q "--connect-timeout=${ARTENV_YQ_CONNECT_TIMEOUT}" \
+      "--timeout=${ARTENV_YQ_MAX_TIME}" -O "${out}" "${url}"
+    return
+  fi
+  die "neither curl nor wget is available to fetch yq"
+}
+
+# Fetch, checksum-verify, and atomically install the pinned yq into
+# $ARTENV_ROOT/vendor/bin/yq. With <force>="force" it re-fetches even if a
+# vendored binary already exists. On success sets ARTENV_YQ to the installed
+# path and returns 0; on any failure it removes the temp file and dies.
+# The temp file is created inside the destination dir so the final `mv` is an
+# atomic same-filesystem rename (safe for concurrent login nodes on a shared FS).
+bootstrap_yq() {
+  local force="${1:-}"
+
+  [[ -n "${ARTENV_ROOT:-}" ]] || die "ARTENV_ROOT is not set"
+
+  local dest_dir="${ARTENV_ROOT}/vendor/bin"
+  local dest="${dest_dir}/yq"
+
+  if [[ "${force}" != "force" && -x "${dest}" ]]; then
+    ARTENV_YQ="${dest}"
+    return 0
+  fi
+
+  local arch
+  arch="$(yq_asset_arch)"   # dies on an unsupported architecture
+
+  local sha_var="ARTENV_YQ_SHA256_${arch}"
+  local expected="${!sha_var:-}"
+  [[ -n "${expected}" ]] || die "no pinned SHA-256 for arch: ${arch}"
+
+  if ! command -v sha256sum >/dev/null 2>&1; then
+    die "sha256sum is required to verify the vendored yq"
+  fi
+
+  mkdir -p -- "${dest_dir}" || die "failed to create ${dest_dir}"
+
+  local url="${ARTENV_YQ_BASE_URL%/}/${ARTENV_YQ_VERSION}/yq_linux_${arch}"
+
+  local tmp
+  tmp="$(mktemp "${dest_dir}/.yq.XXXXXX")" || die "failed to create a temp file in ${dest_dir}"
+
+  if ! yq_download "${url}" "${tmp}"; then
+    rm -f -- "${tmp}"
+    die "failed to fetch yq from ${url} (run 'artenv bootstrap' on a login node with network access, or place a yq binary at ${dest})"
+  fi
+
+  local actual
+  actual="$(sha256sum -- "${tmp}" | { read -r sum _rest; printf '%s' "${sum}"; })"
+  if [[ "${actual}" != "${expected}" ]]; then
+    rm -f -- "${tmp}"
+    die "yq checksum mismatch for ${ARTENV_YQ_VERSION} yq_linux_${arch} (expected ${expected}, got ${actual}); refusing to install"
+  fi
+
+  if ! chmod +x -- "${tmp}"; then
+    rm -f -- "${tmp}"
+    die "failed to make ${tmp} executable"
+  fi
+  if ! mv -f -- "${tmp}" "${dest}"; then
+    rm -f -- "${tmp}"
+    die "failed to install yq to ${dest}"
+  fi
+
+  ARTENV_YQ="${dest}"
+  return 0
+}
+
 toml_get() {
   local file="$1"
   local section="$2"

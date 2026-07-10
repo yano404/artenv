@@ -120,6 +120,10 @@ _artenv_completion() {
       COMPREPLY=( $(compgen -W "-h --help" -- "${cur}") )
       return 0
       ;;
+    bootstrap)
+      COMPREPLY=( $(compgen -W "--force -h --help" -- "${cur}") )
+      return 0
+      ;;
     *)
       COMPREPLY=()
       return 0

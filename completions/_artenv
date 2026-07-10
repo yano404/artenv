@@ -111,6 +111,10 @@ _artenv() {
       compadd -- -h --help
       return 0
       ;;
+    bootstrap)
+      compadd -- --force -h --help
+      return 0
+      ;;
     *)
       return 0
       ;;

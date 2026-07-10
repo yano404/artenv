@@ -1,0 +1,51 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+script_dir="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
+# shellcheck source=/dev/null
+source "${script_dir}/util.sh"
+
+usage() {
+  cat <<'EOS'
+usage: artenv bootstrap [--force]
+
+Vendor a pinned, statically-linked mikefarah/yq into $ARTENV_ROOT/vendor/bin/yq.
+artenv needs yq (v4+) for TOML parsing; this fetches it once, verifies its
+SHA-256 against a pinned checksum, and installs it atomically. Run it on a login
+node with network access; compute nodes then reuse the cached binary offline.
+
+Idempotent: if a vendored yq already exists it is left in place unless --force is
+given. This never touches a system yq already on your PATH.
+
+Options:
+  --force       Re-fetch and reinstall even if a vendored yq already exists
+  -h, --help    Show this help
+EOS
+}
+
+main() {
+  local force=""
+
+  while [[ $# -gt 0 ]]; do
+    case "$1" in
+      -h|--help) usage; exit 0 ;;
+      --force)   force="force"; shift ;;
+      -*)        die "unknown option: $1" ;;
+      *)         usage >&2; die "unexpected argument: $1" ;;
+    esac
+  done
+
+  [[ -n "${ARTENV_ROOT:-}" ]] || die "ARTENV_ROOT is not set"
+
+  # Preflight: fail fast and helpfully before spending a download timeout when
+  # there is no network and nothing cached yet.
+  local dest="${ARTENV_ROOT}/vendor/bin/yq"
+  if [[ "${force}" != "force" && ! -x "${dest}" ]] && ! yq_net_reachable; then
+    die "cannot reach ${ARTENV_YQ_BASE_URL} and no vendored yq is cached. Run 'artenv bootstrap' on a login node with network access, or place a yq binary at ${dest}"
+  fi
+
+  bootstrap_yq "${force}"
+  printf 'artenv: vendored yq %s at %s\n' "${ARTENV_YQ_VERSION}" "${dest}"
+}
+
+main "$@"
