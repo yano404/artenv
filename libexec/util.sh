@@ -41,8 +41,69 @@ resolve_path() {
   die "realpath or readlink -f is required"
 }
 
+# --- yq resolution & wrapper -----------------------------------------------
+# artenv needs mikefarah/yq v4+ for its TOML support (`-p toml`). The unrelated
+# PyPI package `yq` (kislyuk's jq wrapper) installs the same command name but
+# cannot parse TOML, so a bare `yq` on PATH is not trustworthy. We resolve an
+# absolute path to a suitable binary into ARTENV_YQ and route every call through
+# the yq() wrapper below.
+#
+# Deliberately NOT a PATH prepend: artenv-sh-shell's activate_native re-exports
+# PATH into the user's login shell, so putting vendor/bin on PATH would leak our
+# vendored yq into the user's environment and shadow theirs. The wrapper keeps
+# the vendored binary confined to artenv's own subprocesses. ARTENV_YQ is never
+# exported, so it does not leak either.
+
+# Route all yq calls through the resolved absolute path. `command` + an absolute
+# path avoids re-entering this function (no recursion). :? makes an unresolved
+# ARTENV_YQ a hard error rather than silently running a stray PATH yq; callers
+# must resolve first via require_yq/resolve_yq.
+yq() {
+  command "${ARTENV_YQ:?ARTENV_YQ is not resolved; call require_yq first}" "$@"
+}
+
+# Return 0 iff <path> is a mikefarah yq of major version >= 4. The PyPI yq
+# prints a different `--version` banner (no "mikefarah") and is rejected.
+yq_is_mikefarah_v4() {
+  local bin="$1" out token major
+  out="$("${bin}" --version 2>/dev/null)" || return 1
+  [[ "${out}" == *mikefarah* ]] || return 1
+  token="${out##* }"      # trailing token, e.g. "v4.47.1"
+  token="${token#v}"      # -> "4.47.1"
+  major="${token%%.*}"    # -> "4"
+  [[ "${major}" =~ ^[0-9]+$ ]] || return 1
+  [[ "${major}" -ge 4 ]]
+}
+
+# Resolve an absolute path to a usable yq into ARTENV_YQ. Idempotent and cheap
+# (this runs on the hot path via require_yq): once ARTENV_YQ is set it returns
+# immediately; otherwise it does at most a stat plus one `--version`. Order:
+#   1. $ARTENV_ROOT/vendor/bin/yq (our pinned vendored binary) if executable.
+#   2. a system yq on PATH, but only when it is mikefarah v4+.
+# Returns 0 with ARTENV_YQ set, or 1 if no usable yq was found.
+resolve_yq() {
+  [[ -n "${ARTENV_YQ:-}" ]] && return 0
+
+  local vendored="${ARTENV_ROOT:-}/vendor/bin/yq"
+  if [[ -n "${ARTENV_ROOT:-}" && -x "${vendored}" ]]; then
+    ARTENV_YQ="${vendored}"
+    return 0
+  fi
+
+  # type -P searches PATH for an external executable, ignoring the yq() function.
+  local sys
+  sys="$(type -P yq 2>/dev/null || true)"
+  if [[ -n "${sys}" ]] && yq_is_mikefarah_v4 "${sys}"; then
+    ARTENV_YQ="${sys}"
+    return 0
+  fi
+
+  return 1
+}
+
 require_yq() {
-  command -v yq >/dev/null 2>&1 || die "yq is required (dnf install yq)"
+  resolve_yq && return 0
+  die "yq (mikefarah v4+) is required. On a login node with network access run 'artenv bootstrap' to vendor a pinned yq, or manually place a yq binary at ${ARTENV_ROOT:-\$ARTENV_ROOT}/vendor/bin/yq"
 }
 
 toml_get() {
