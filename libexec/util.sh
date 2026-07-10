@@ -112,7 +112,7 @@ require_yq() {
   if [[ -z "${_ARTENV_YQ_BOOTSTRAP_TRIED:-}" && "${ARTENV_NO_AUTO_BOOTSTRAP:-}" != "1" ]]; then
     _ARTENV_YQ_BOOTSTRAP_TRIED=1
     if yq_net_reachable; then
-      bootstrap_yq
+      bootstrap_yq ""   # explicit empty force: install only if missing
       resolve_yq && return 0
     fi
   fi
