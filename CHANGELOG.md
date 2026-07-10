@@ -6,6 +6,36 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 Major versions track broad themes rather than strict per-flag SemVer — see
 [Versioning](README.md#versioning).
 
+## [2.4.0] - 2026-07-11
+
+Zero-admin, self-contained tooling. artenv can now install its own pinned yq, so
+a fresh checkout is usable on shared HPC clusters without root or a system
+package manager. Additive and backward compatible: an existing mikefarah v4+ yq
+on your `PATH` keeps working unchanged.
+
+### Added
+
+- **`bootstrap`** — `artenv bootstrap` vendors a pinned, statically-linked
+  mikefarah/yq (a glibc-independent Go binary) into
+  `$ARTENV_ROOT/vendor/bin/yq`: it fetches the binary, verifies it against a
+  pinned SHA-256, and installs it atomically. This makes a fresh checkout usable
+  with **zero admin** — no root, no `dnf install yq`. On HPC, run it once on a
+  login node with network access; compute nodes then reuse the cached binary
+  fully offline. `--force` re-fetches even when one is already vendored.
+- yq is now resolved through a `vendor/bin/yq` → system-`yq` order (a system yq
+  is accepted only when it is mikefarah v4+; the unrelated PyPI `yq`, which
+  cannot parse TOML, is rejected). When no usable yq is found, artenv
+  auto-vendors it on first use if the network is reachable, and otherwise fails
+  fast with guidance to run `artenv bootstrap` on a login node. `artenv init`
+  prints a one-line hint (stderr only) when no yq is resolvable, and
+  `artenv doctor --orphans` reports which yq (vendored vs system) is in use.
+
+### Changed
+
+- The yq requirement message no longer suggests the root-only
+  `dnf install yq`; it points at `artenv bootstrap` and the manual
+  `vendor/bin/yq` drop-in path instead.
+
 ## [2.3.1] - 2026-07-10
 
 ### Fixed
@@ -188,6 +218,7 @@ compatible: every old command name still works as a deprecated alias.
 
 - Initial release (symlink-based version/environment management).
 
+[2.4.0]: https://github.com/yano404/artenv/compare/v2.3.1...v2.4.0
 [2.3.1]: https://github.com/yano404/artenv/compare/v2.3.0...v2.3.1
 [2.3.0]: https://github.com/yano404/artenv/compare/v2.2.1...v2.3.0
 [2.2.1]: https://github.com/yano404/artenv/compare/v2.2.0...v2.2.1

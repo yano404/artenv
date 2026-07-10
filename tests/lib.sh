@@ -118,6 +118,15 @@ EOF
 
 set_default_env() { printf '%s\n' "$1" > "${ARTENV_ROOT}/env"; }
 
+# Install a vendored yq under $ARTENV_ROOT/vendor/bin/yq by copying the real
+# system yq (run.sh gates on a system yq being present). Used to exercise the
+# "vendored takes priority over system" resolution path offline.
+fake_vendored_yq() {
+  mkdir -p "${ARTENV_ROOT}/vendor/bin"
+  cp -- "$(command -v yq)" "${ARTENV_ROOT}/vendor/bin/yq"
+  chmod +x "${ARTENV_ROOT}/vendor/bin/yq"
+}
+
 # --- run artenv, capturing $output (stdout+stderr) and $status --------------
 
 run() { # <args...>

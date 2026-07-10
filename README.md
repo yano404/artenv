@@ -15,13 +15,44 @@ deprecated aliases.
 
 - bash
 - git (used to fetch project templates)
-- yq v4 with TOML support (`dnf install yq` on RHEL/Fedora; or download from [github.com/mikefarah/yq](https://github.com/mikefarah/yq/releases))
+- [mikefarah/yq](https://github.com/mikefarah/yq) v4+ (for TOML parsing) — artenv
+  can **vendor** this for you, see [yq bootstrap](#yq-bootstrap) below. A vendored
+  yq takes priority; a system `yq` on your `PATH` is used automatically only when
+  no vendored yq is present and it is mikefarah v4+.
+- `curl` or `wget` (only for `artenv bootstrap` / `artenv version install`)
+
+> **Note:** the unrelated PyPI package also named `yq` (a `jq` wrapper) cannot
+> parse TOML and is rejected; artenv needs the Go binary from mikefarah/yq.
 
 ## Installation
 
 ```sh
 git clone https://github.com/yano404/artenv.git ~/.artenv
 ```
+
+### yq bootstrap
+
+artenv needs mikefarah/yq v4+ to read its TOML config. Resolution is zero-admin
+and needs no root:
+
+1. **Vendored** — `$ARTENV_ROOT/vendor/bin/yq`, a pinned, statically-linked
+   binary artenv installs for you. Takes priority when present.
+2. **System** — a `yq` already on your `PATH`, used only when it is mikefarah v4+.
+
+To vendor the pinned binary explicitly (recommended on HPC: run it once on a
+**login node** with network access; compute nodes then reuse the cached binary
+fully offline):
+
+```sh
+artenv bootstrap          # fetch + SHA-256-verify + install into vendor/bin/yq
+artenv bootstrap --force  # re-fetch even if one is already vendored
+```
+
+The download is checksum-verified against a pinned SHA-256 and installed
+atomically. If no usable yq is found, artenv also auto-vendors it on first use
+when the network is reachable; on an offline node with nothing cached it fails
+fast and tells you to run `artenv bootstrap` on a login node. The `vendor/` tree
+is runtime data (gitignored) and never touched by `artenv upgrade`.
 
 ## Setup
 
