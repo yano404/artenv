@@ -12,13 +12,14 @@ Environment commands:
   unarchive         Unarchive an environment
   ls                Print the environment list
   info              Print detail information of the environment
+  edit              Open an environment's config in \$EDITOR
   new               Create the new working directory from templates
   shell             Set or show the activated environment in the current shell
   default           Set or show the default environment
 
 Version commands:
   version <cmd>     Manage artemis versions
-                    (ls/register/remove/archive/unarchive/install/current;
+                    (ls/register/remove/archive/unarchive/edit/install/current;
                      see \`artenv version help')
 
 Template commands:
