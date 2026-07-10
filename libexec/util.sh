@@ -103,6 +103,20 @@ resolve_yq() {
 
 require_yq() {
   resolve_yq && return 0
+
+  # Miss: lazily vendor yq (F1 hybrid). Attempt an auto-bootstrap at most once
+  # per process, and only when the download base looks reachable so an offline
+  # compute node fails fast instead of waiting out a download timeout. On a
+  # reachable network bootstrap_yq installs and sets ARTENV_YQ (or dies with a
+  # network-aware message); we then re-resolve.
+  if [[ -z "${_ARTENV_YQ_BOOTSTRAP_TRIED:-}" && "${ARTENV_NO_AUTO_BOOTSTRAP:-}" != "1" ]]; then
+    _ARTENV_YQ_BOOTSTRAP_TRIED=1
+    if yq_net_reachable; then
+      bootstrap_yq
+      resolve_yq && return 0
+    fi
+  fi
+
   die "yq (mikefarah v4+) is required. On a login node with network access run 'artenv bootstrap' to vendor a pinned yq, or manually place a yq binary at ${ARTENV_ROOT:-\$ARTENV_ROOT}/vendor/bin/yq"
 }
 
