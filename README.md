@@ -16,8 +16,9 @@ deprecated aliases.
 - bash
 - git (used to fetch project templates)
 - [mikefarah/yq](https://github.com/mikefarah/yq) v4+ (for TOML parsing) — artenv
-  can **vendor** this for you, see [yq bootstrap](#yq-bootstrap) below. A system
-  `yq` on your `PATH` is used automatically when it is mikefarah v4+.
+  can **vendor** this for you, see [yq bootstrap](#yq-bootstrap) below. A vendored
+  yq takes priority; a system `yq` on your `PATH` is used automatically only when
+  no vendored yq is present and it is mikefarah v4+.
 - `curl` or `wget` (only for `artenv bootstrap` / `artenv version install`)
 
 > **Note:** the unrelated PyPI package also named `yq` (a `jq` wrapper) cannot
@@ -658,9 +659,6 @@ upgrading.
 2. Apptainer support and the resource-grouped command taxonomy (`version` /
    `templates` groups, implicit env commands, deprecated aliases).
 3. Templates managed via external git repositories.
-4. Zero-admin, self-vendoring runtime: artenv bootstraps its own pinned yq into
-   `vendor/` (no root, no `dnf`), making a fresh checkout usable on HPC nodes
-   without a system package.
 
 The next major (**v3**) is reserved for the next thematic shift beyond these.
 
