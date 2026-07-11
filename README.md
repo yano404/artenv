@@ -32,12 +32,13 @@ git clone https://github.com/yano404/artenv.git ~/.artenv
 
 ### yq bootstrap
 
-artenv needs mikefarah/yq v4+ to read its TOML config. Resolution is zero-admin
-and needs no root:
+artenv needs mikefarah/yq v4+ to read its TOML config. It finds and installs yq
+without root or a system package, in this order:
 
-1. **Vendored** — `$ARTENV_ROOT/vendor/bin/yq`, a pinned, statically-linked
-   binary artenv installs for you. Takes priority when present.
-2. **System** — a `yq` already on your `PATH`, used only when it is mikefarah v4+.
+1. **artenv's own copy** — a pinned, statically-linked yq that artenv installs
+   into `$ARTENV_ROOT/vendor/bin/yq`. Used first when present.
+2. **A system yq** — one already on your `PATH`, used only when it is mikefarah
+   v4+.
 
 To vendor the pinned binary explicitly (recommended on HPC: run it once on a
 **login node** with network access; compute nodes then reuse the cached binary
