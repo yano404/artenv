@@ -14,9 +14,13 @@ jobs:
 
       - name: Install yq (mikefarah v4)
         run: |
-          sudo curl -fsSL -o /usr/local/bin/yq \
+          # Same pinned version + SHA-256 as ARTENV_YQ_VERSION/ARTENV_YQ_SHA256_amd64
+          # in libexec/util.sh; bump them together.
+          curl -fsSL -o yq \
             https://github.com/mikefarah/yq/releases/download/v4.47.1/yq_linux_amd64
-          sudo chmod +x /usr/local/bin/yq
+          echo "0fb28c6680193c41b364193d0c0fc4a03177aecde51cfc04d506b1517158c2fb  yq" | sha256sum -c -
+          sudo install -m 0755 yq /usr/local/bin/yq
+          rm yq
           yq --version
 
       - name: Syntax check (bash -n)

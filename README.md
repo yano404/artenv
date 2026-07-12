@@ -14,6 +14,7 @@ deprecated aliases.
 ## Requirements
 
 - bash
+- GNU coreutils (`readlink -f` / `realpath`)
 - git (used to fetch project templates)
 - [mikefarah/yq](https://github.com/mikefarah/yq) v4+ (for TOML parsing) — artenv
   can **vendor** this for you, see [yq bootstrap](#yq-bootstrap) below. A vendored
