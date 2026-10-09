@@ -79,8 +79,9 @@ activate_native() {
   cmake_prefix_path="$(prepend_path "${cmake_prefix_path}" "${artsys}")"
   cmake_prefix_path="$(prepend_path "${cmake_prefix_path}" "${yamlcmake}")"
 
+  # make/cmake are not wrapped (#64), so leave any user-defined host functions alone.
   # shellcheck disable=SC2016  # single quotes are intentional: emit shell code for the caller to eval
-  printf 'for _artenv_cmd in artemis cmake make root artexec; do declare -f "${_artenv_cmd}" &>/dev/null && unset -f "${_artenv_cmd}"; done; unset _artenv_cmd\n'
+  printf 'for _artenv_cmd in artemis root artexec; do declare -f "${_artenv_cmd}" &>/dev/null && unset -f "${_artenv_cmd}"; done; unset _artenv_cmd\n'
 
   print_export "ART_PROJECT" "${env}"
   print_export "ROOT_VERSION" "${root_version}"
@@ -158,7 +159,9 @@ activate_apptainer() {
     bind_str="${bind_str},${binds}"
   fi
 
-  for cmd in artemis cmake make root; do
+  # Only interactive entry points are wrapped; run builds and anything else
+  # inside the container explicitly via artexec (#64).
+  for cmd in artemis root; do
     printf '%s() { apptainer exec --bind %q %q %s "$@"; }\n' \
       "${cmd}" "${bind_str}" "${image}" "${cmd}"
   done
