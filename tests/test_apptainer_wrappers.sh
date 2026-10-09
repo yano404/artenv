@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
 # shellcheck disable=SC2154  # status/output are set by run()/run_in() in lib.sh
+# shellcheck disable=SC2317  # dummy host functions are only inspected via declare -f, never called
 # Tests which commands `artenv shell` wraps for Apptainer environments (#64).
 # EMIT-level: they check the shell code sh-shell prints, not the container
 # runtime. Only artemis/root are wrapped; builds go through artexec, and
