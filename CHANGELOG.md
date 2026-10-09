@@ -6,6 +6,33 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 Major versions track broad themes rather than strict per-flag SemVer — see
 [Versioning](README.md#versioning).
 
+## [2.5.0] - 2026-10-09
+
+Clearer host/container boundary for Apptainer environments. Only the
+interactive entry points `artemis` and `root` are redirected into the
+container; everything else, builds included, runs inside it only when prefixed
+with `artexec`.
+
+**Upgrade note:** in an Apptainer environment, replace `cmake ..; make` with
+`artexec cmake ..; artexec make`, and restart any shell that was activated
+before upgrading.
+
+### Changed
+
+- **Apptainer environments no longer wrap `make` and `cmake`.** Only
+  `artemis` and `root` are redirected into the container; build tools now run
+  on the host unless prefixed with `artexec`, so an active Apptainer env no
+  longer silently hijacks every `make` / `cmake` in the shell. Build inside the
+  container with `artexec cmake ...` / `artexec make ...`. artenv no longer
+  touches `make` / `cmake` functions at all, so user-defined host helpers of
+  those names are left alone. A shell activated by an older artenv keeps its
+  old `make` / `cmake` wrappers until it is restarted (or bypass them with
+  `command make`). (#64)
+- README now lists GNU coreutils (`readlink -f` / `realpath`) as a
+  requirement; `tests/run.sh` no longer suggests the root-only
+  `dnf install yq`; CI verifies the downloaded yq against the pinned SHA-256.
+  Docs/tests/CI only. (#62)
+
 ## [2.4.1] - 2026-07-11
 
 ### Changed
@@ -227,6 +254,7 @@ compatible: every old command name still works as a deprecated alias.
 
 - Initial release (symlink-based version/environment management).
 
+[2.5.0]: https://github.com/yano404/artenv/compare/v2.4.1...v2.5.0
 [2.4.1]: https://github.com/yano404/artenv/compare/v2.4.0...v2.4.1
 [2.4.0]: https://github.com/yano404/artenv/compare/v2.3.1...v2.4.0
 [2.3.1]: https://github.com/yano404/artenv/compare/v2.3.0...v2.3.1

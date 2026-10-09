@@ -11,7 +11,7 @@ set -uo pipefail
 ARTENV_REPO="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)"
 export ARTENV_REPO
 
-command -v yq >/dev/null 2>&1 || { echo "yq is required to run the tests (dnf install yq)" >&2; exit 2; }
+command -v yq >/dev/null 2>&1 || { echo "yq (mikefarah v4+) is required on PATH to run the tests; no root needed — see README 'yq bootstrap' for a static-binary install" >&2; exit 2; }
 
 # shellcheck source=/dev/null
 source "${ARTENV_REPO}/tests/lib.sh"
