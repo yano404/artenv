@@ -587,12 +587,18 @@ See [Templates](#templates).
 When an Apptainer environment is active, the following commands are automatically wrapped to run inside the container:
 
 - `artemis`
-- `cmake`
-- `make`
 - `root`
 - `artexec` — runs an arbitrary command inside the container
 
+Everything else — including build tools such as `cmake` and `make` — runs on the
+host unless you prefix it with `artexec`. Build your analysis code inside the
+container so it uses the container's compiler, ROOT and artemis:
+
 ```sh
+# Build inside the Apptainer container
+artexec cmake -S . -B build
+artexec make -C build
+
 # Run any command inside the Apptainer container
 artexec ./make.sh
 artexec bash
