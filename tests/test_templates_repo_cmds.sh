@@ -328,3 +328,54 @@ test_top_level_help_mentions_repo_cmds() {
   assert_status "${status}" 0
   assert_contains "${output}" "add-repo"
 }
+
+test_add_repo_sigterm_during_fetch_rolls_back() {
+  local fakebin="${ARTENV_ROOT}/.fixtures/fakebin"
+  mkdir -p "${fakebin}"
+  printf '#!/bin/sh\nexec sleep 30\n' > "${fakebin}/git"
+  chmod +x "${fakebin}/git"
+  local conf="${ARTENV_ROOT}/template-repos/slow.toml"
+  # Own process group (like a terminal Ctrl-C) so the whole pipeline gets it.
+  set -m
+  PATH="${fakebin}:${PATH}" "${ARTENV_BIN}" templates add-repo slow "file:///x" >/dev/null 2>&1 &
+  local pid=$!
+  set +m
+  local i
+  for i in $(seq 1 50); do
+    [[ -e "${conf}" ]] && break
+    sleep 0.1
+  done
+  assert_file "${conf}"
+  sleep 0.3  # let the fetch start
+  kill -TERM -- "-${pid}"
+  local rc=0
+  wait "${pid}" || rc=$?
+  assert_status "${rc}" 130
+  assert_no_file "${conf}"
+  run templates add-repo slow "file:///x" --no-fetch
+  assert_status "${status}" 0
+}
+
+test_enable_repo_matches_indented_enabled_key() {
+  mkdir -p "${ARTENV_ROOT}/template-repos"
+  printf '[repo]\nurl = "file:///x"\n  enabled = true\n' > "${ARTENV_ROOT}/template-repos/ind.toml"
+  run templates disable-repo ind
+  assert_status "${status}" 0
+  [[ "$(grep -c 'enabled' "${ARTENV_ROOT}/template-repos/ind.toml")" -eq 1 ]] || fail "duplicate enabled key"
+  [[ "$(toml_field "${ARTENV_ROOT}/template-repos/ind.toml" repo enabled)" == "false" ]] || fail "enabled should be false"
+}
+
+test_enable_repo_preserves_trailing_comment() {
+  mkdir -p "${ARTENV_ROOT}/template-repos"
+  printf '[repo]\nurl = "file:///x"\nenabled = false   # beamtime off\n' > "${ARTENV_ROOT}/template-repos/cm.toml"
+  run templates enable-repo cm
+  assert_status "${status}" 0
+  assert_contains "$(cat "${ARTENV_ROOT}/template-repos/cm.toml")" "# beamtime off"
+  [[ "$(toml_field "${ARTENV_ROOT}/template-repos/cm.toml" repo enabled)" == "true" ]] || fail "enabled should be true"
+}
+
+test_add_repo_help_ref_mentions_commit() {
+  run templates add-repo --help
+  assert_status "${status}" 0
+  assert_contains "${output}" "Branch, tag or commit"
+}
