@@ -313,3 +313,18 @@ test_add_repo_bad_names() {
   assert_status "${status}" 1
   assert_contains "${output}" "url must not be empty"
 }
+
+test_templates_group_help_lists_repo_cmds() {
+  run templates --help
+  assert_status "${status}" 0
+  local c
+  for c in add-repo remove-repo enable-repo disable-repo; do
+    assert_contains "${output}" "${c}"
+  done
+}
+
+test_top_level_help_mentions_repo_cmds() {
+  run help
+  assert_status "${status}" 0
+  assert_contains "${output}" "add-repo"
+}

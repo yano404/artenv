@@ -10,9 +10,9 @@ usage() {
   cat <<'EOS'
 usage: artenv templates enable-repo <name>
 
-Enable a template repository. A disabled repository is hidden from
-`artenv templates ls' and skipped by `artenv templates update', but its cache
-is kept and qualified names (<repo>/<template>) still resolve.
+Re-enable a disabled template repository; its templates reappear in
+`artenv templates ls' / `artenv new' and it is refreshed by
+`artenv templates update' again.
 
 Options:
   -h, --help    Show this help

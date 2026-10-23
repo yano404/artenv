@@ -23,6 +23,15 @@ _artenv_list_versions() {
   done
 }
 
+_artenv_list_template_repos() {
+  [[ -n "${ARTENV_ROOT:-}" && -d "${ARTENV_ROOT}/template-repos" ]] || return 0
+  local f
+  for f in "${ARTENV_ROOT}/template-repos"/*.toml; do
+    [[ -f "${f}" ]] || continue
+    basename "${f}" .toml
+  done
+}
+
 _artenv_list_templates() {
   command artenv templates ls 2>/dev/null
 }
@@ -61,9 +70,23 @@ _artenv_completion() {
     templates)
       # `artenv templates <sub>`
       if [[ ${COMP_CWORD} -eq 2 ]]; then
-        COMPREPLY=( $(compgen -W "ls repos update -h" -- "${cur}") )
+        COMPREPLY=( $(compgen -W "ls repos update add-repo remove-repo enable-repo disable-repo -h" -- "${cur}") )
       else
-        COMPREPLY=()
+        case "${COMP_WORDS[2]:-}" in
+          remove-repo|enable-repo|disable-repo)
+            COMPREPLY=( $(compgen -W "$(_artenv_list_template_repos)" -- "${cur}") )
+            ;;
+          add-repo)
+            if [[ "${cur}" == -* ]]; then
+              COMPREPLY=( $(compgen -W "--ref --description --no-fetch -h --help" -- "${cur}") )
+            else
+              COMPREPLY=()
+            fi
+            ;;
+          *)
+            COMPREPLY=()
+            ;;
+        esac
       fi
       return 0
       ;;

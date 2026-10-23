@@ -6,6 +6,26 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 Major versions track broad themes rather than strict per-flag SemVer — see
 [Versioning](README.md#versioning).
 
+## [Unreleased]
+
+### Added
+
+- **`artenv templates add-repo <name> <url> [--ref R] [--description D] [--no-fetch]`**
+  registers a template repository and fetches it immediately. If the fetch
+  fails the registration is rolled back; `--no-fetch` only registers.
+- **`artenv templates remove-repo <name>`** deletes a repository's config and
+  cache without prompting. Projects already created from it are unaffected.
+- **`artenv templates disable-repo <name>`** hides a repository from
+  `templates ls` / `new` and skips it in `templates update`; qualified
+  `-t <repo>/<template>` still resolves.
+- **`artenv templates enable-repo <name>`** reverses `disable-repo`.
+- Shell completion for the new subcommands, including repository names.
+
+### Fixed
+
+- Template caches whose repository config was deleted are no longer listed by
+  `templates ls` or offered by `new`.
+
 ## [2.5.0] - 2026-10-09
 
 Clearer host/container boundary for Apptainer environments. Only the
@@ -254,6 +274,7 @@ compatible: every old command name still works as a deprecated alias.
 
 - Initial release (symlink-based version/environment management).
 
+[Unreleased]: https://github.com/yano404/artenv/compare/v2.5.0...HEAD
 [2.5.0]: https://github.com/yano404/artenv/compare/v2.4.1...v2.5.0
 [2.4.1]: https://github.com/yano404/artenv/compare/v2.4.0...v2.4.1
 [2.4.0]: https://github.com/yano404/artenv/compare/v2.3.1...v2.4.0
