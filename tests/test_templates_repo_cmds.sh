@@ -340,8 +340,7 @@ test_add_repo_sigterm_during_fetch_rolls_back() {
   PATH="${fakebin}:${PATH}" "${ARTENV_BIN}" templates add-repo slow "file:///x" >/dev/null 2>&1 &
   local pid=$!
   set +m
-  local i
-  for i in $(seq 1 50); do
+  for _ in $(seq 1 50); do
     [[ -e "${conf}" ]] && break
     sleep 0.1
   done
