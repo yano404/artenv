@@ -1,6 +1,10 @@
 artenv
 ======
 
+[![GitHub release](https://img.shields.io/github/v/release/yano404/artenv)](https://github.com/yano404/artenv/releases/latest)
+[![CI](https://github.com/yano404/artenv/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/yano404/artenv/actions/workflows/ci.yml)
+[![License](https://img.shields.io/github/license/yano404/artenv)](LICENSE)
+
 artenv is the version and environment manager tool for [Artemis](https://github.com/artemis-dev/artemis).
 artenv enables you to switch multiple artemis versions and analysis environments easily.
 Both native installations and [Apptainer](https://apptainer.org/) container images are supported as artemis versions.
