@@ -1,0 +1,55 @@
+#!/usr/bin/env bash
+
+set -euo pipefail
+
+script_dir="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
+# shellcheck source=/dev/null
+source "${script_dir}/util.sh"
+
+usage() {
+  cat <<'EOS'
+usage: artenv templates disable-repo <name>
+
+Disable a template repository. A disabled repository is hidden from
+`artenv templates ls' and skipped by `artenv templates update', but its cache
+is kept and qualified names (<repo>/<template>) still resolve.
+
+Options:
+  -h, --help    Show this help
+EOS
+}
+
+main() {
+  [[ -n "${ARTENV_ROOT:-}" ]] || die "ARTENV_ROOT is not set"
+  ensure_default_repo
+  require_yq
+
+  local name=""
+
+  while [[ $# -gt 0 ]]; do
+    case "$1" in
+      -h|--help) usage; exit 0 ;;
+      -*)        die "unknown option: $1" ;;
+      *)
+        [[ -z "${name}" ]] || die "usage: artenv templates disable-repo <name>"
+        name="$1"; shift ;;
+    esac
+  done
+
+  [[ -n "${name}" ]] || die "usage: artenv templates disable-repo <name>"
+  validate_template_repo_name "${name}"
+
+  local conf
+  conf="$(template_repo_conf "${name}")"
+  [[ -f "${conf}" ]] || die "no such template repository: ${name}"
+
+  if [[ "$(template_repo_enabled_flag "${name}")" == "false" ]]; then
+    printf '%s is already disabled\n' "${name}"
+    exit 0
+  fi
+
+  set_template_repo_enabled_flag "${conf}" false
+  printf '%s was disabled\n' "${name}"
+}
+
+main "$@"

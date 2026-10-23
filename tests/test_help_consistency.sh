@@ -32,6 +32,8 @@ _HELP_COMMANDS=(
   "version install"
   "templates"
   "templates ls"
+  "templates enable-repo"
+  "templates disable-repo"
   "templates repos"
   "templates update"
   "init"
