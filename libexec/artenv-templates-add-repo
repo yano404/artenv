@@ -14,7 +14,7 @@ Register a template repository and fetch it. If the fetch fails, the
 registration is rolled back.
 
 Options:
-  --ref <ref>           Branch or tag to track
+  --ref <ref>           Branch, tag or commit to track
   --description <text>  Short description shown by `artenv templates repos'
   --no-fetch            Register only; fetch later with `artenv templates update'
   -h, --help            Show this help
@@ -74,6 +74,8 @@ main() {
 
   mkdir -p -- "${ARTENV_ROOT}/template-repos"
   local tmp
+  # Roll back on Ctrl-C/SIGTERM so an unfetched registration is never left behind.
+  trap 'rm -f -- "${tmp:-}" "${conf}"; exit 130' INT TERM
   tmp="$(mktemp "${conf}.XXXXXX")"
   {
     printf '[repo]\n'
@@ -87,6 +89,7 @@ main() {
     fi
   } > "${tmp}"
   mv -- "${tmp}" "${conf}"
+  tmp=""
   printf 'added    %s\n' "${name}"
 
   if [[ ${no_fetch} -eq 1 ]]; then
@@ -95,10 +98,12 @@ main() {
   fi
 
   if ! "${script_dir}/artenv-templates-update" "${name}"; then
+    trap - INT TERM
     rm -f -- "${conf}"
     printf "artenv: could not fetch '%s'; registration rolled back (check the URL and authentication)\n" "${name}" >&2
     exit 1
   fi
+  trap - INT TERM
 }
 
 main "$@"

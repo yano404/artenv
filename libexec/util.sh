@@ -404,8 +404,12 @@ set_template_repo_enabled_flag() {
   tmp="$(mktemp "${dir}/.tmp.enabled.XXXXXX")"
 
   while IFS= read -r line || [[ -n "${line}" ]]; do
-    if [[ "${done}" -eq 0 && "${line}" =~ ^enabled[[:space:]]*= ]]; then
-      printf 'enabled     = %s\n' "${value}" >> "${tmp}"
+    if [[ "${done}" -eq 0 && "${line}" =~ ^[[:space:]]*enabled[[:space:]]*= ]]; then
+      local comment=""
+      if [[ "${line}" =~ ([[:space:]]*#.*)$ ]]; then
+        comment="${BASH_REMATCH[1]}"
+      fi
+      printf 'enabled     = %s%s\n' "${value}" "${comment}" >> "${tmp}"
       done=1
     else
       printf '%s\n' "${line}" >> "${tmp}"
