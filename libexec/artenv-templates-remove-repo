@@ -1,0 +1,56 @@
+#!/usr/bin/env bash
+
+set -euo pipefail
+
+script_dir="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
+# shellcheck source=/dev/null
+source "${script_dir}/util.sh"
+
+usage() {
+  cat <<'EOS'
+usage: artenv templates remove-repo <name>
+
+Remove a template repository: delete its configuration
+(template-repos/<name>.toml) and its cache (templates/<name>/). Projects
+already created from its templates are not affected. No confirmation is asked.
+
+Options:
+  -h, --help    Show this help
+EOS
+}
+
+main() {
+  [[ -n "${ARTENV_ROOT:-}" ]] || die "ARTENV_ROOT is not set"
+  ensure_default_repo
+  require_yq
+
+  local name=""
+
+  while [[ $# -gt 0 ]]; do
+    case "$1" in
+      -h|--help) usage; exit 0 ;;
+      -*)        die "unknown option: $1" ;;
+      *)
+        [[ -z "${name}" ]] || die "usage: artenv templates remove-repo <name>"
+        name="$1"; shift ;;
+    esac
+  done
+
+  [[ -n "${name}" ]] || die "usage: artenv templates remove-repo <name>"
+  validate_template_repo_name "${name}"
+
+  local conf
+  conf="$(template_repo_conf "${name}")"
+  [[ -f "${conf}" ]] || die "no such template repository: ${name}"
+
+  rm -f -- "${conf}"
+  printf 'removed config: template-repos/%s.toml\n' "${name}"
+
+  local cache="${ARTENV_ROOT}/templates/${name}"
+  if [[ -d "${cache}" ]]; then
+    rm -rf -- "${cache}"
+    printf 'removed cache: templates/%s/\n' "${name}"
+  fi
+}
+
+main "$@"

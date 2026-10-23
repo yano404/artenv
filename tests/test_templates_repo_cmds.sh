@@ -131,3 +131,63 @@ test_enable_disable_repo_errors() {
     assert_contains "${output}" "unknown option: -x"
   done
 }
+
+test_remove_repo_deletes_conf_and_cache() {
+  _repo_cmds_setup_myrepo
+  run templates remove-repo myrepo
+  assert_status "${status}" 0
+  assert_contains "${output}" "removed config: template-repos/myrepo.toml"
+  assert_contains "${output}" "removed cache: templates/myrepo/"
+  assert_no_file "${ARTENV_ROOT}/template-repos/myrepo.toml"
+  assert_no_file "${ARTENV_ROOT}/templates/myrepo"
+  run templates repos
+  assert_not_contains "${output}" "myrepo"
+}
+
+test_remove_repo_without_cache() {
+  local repo; repo="$(make_template_repo alpha)"
+  write_repo_conf myrepo "${repo}"
+  run templates remove-repo myrepo
+  assert_status "${status}" 0
+  assert_contains "${output}" "removed config"
+  assert_not_contains "${output}" "removed cache"
+  assert_no_file "${ARTENV_ROOT}/template-repos/myrepo.toml"
+}
+
+test_remove_repo_default_not_reseeded() {
+  seed_share_default
+  run templates repos
+  assert_status "${status}" 0
+  assert_contains "${output}" "default"
+  run templates remove-repo default
+  assert_status "${status}" 0
+  run templates repos
+  assert_not_contains "${output}" "default"
+}
+
+test_remove_repo_keeps_created_project() {
+  _repo_cmds_setup_myrepo
+  mkdir -p "${ARTENV_ROOT}/.fixtures"
+  run new "${ARTENV_ROOT}/.fixtures/proj" -t myrepo/alpha
+  assert_status "${status}" 0
+  run templates remove-repo myrepo
+  assert_status "${status}" 0
+  assert_file "${ARTENV_ROOT}/.fixtures/proj/file.txt"
+}
+
+test_remove_repo_errors() {
+  mkdir -p "${ARTENV_ROOT}/templates/local/keep"
+  run templates remove-repo nosuch
+  assert_status "${status}" 1
+  assert_contains "${output}" "no such template repository"
+  run templates remove-repo local
+  assert_status "${status}" 1
+  assert_contains "${output}" "reserved"
+  [[ -d "${ARTENV_ROOT}/templates/local/keep" ]] || fail "templates/local touched"
+  run templates remove-repo
+  assert_status "${status}" 1
+  assert_contains "${output}" "usage"
+  run templates remove-repo -x
+  assert_status "${status}" 1
+  assert_contains "${output}" "unknown option: -x"
+}

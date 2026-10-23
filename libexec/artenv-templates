@@ -13,11 +13,12 @@ usage: artenv templates <subcommand> [args]
 Manage project templates provided by external git repositories.
 
 Subcommands:
-  ls          List available templates as <repo>/<template>
-  repos       List configured template repositories
-  update      Clone or update template repositories
+  ls            List available templates as <repo>/<template>
+  repos         List configured template repositories
+  update        Clone or update template repositories
   enable-repo   Enable a template repository
   disable-repo  Disable a template repository
+  remove-repo   Remove a template repository and its cache
 
 Options:
   -h, --help  Show this help
