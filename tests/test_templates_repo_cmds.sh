@@ -21,7 +21,6 @@ test_new_qualified_orphan_cache_still_works() {
 }
 
 test_new_qualified_disabled_repo_still_works() {
-  TEMPLATE_REPOS=()
   local repo; repo="$(make_template_repo alpha)"
   write_repo_conf myrepo "${repo}"
   run templates update
@@ -31,5 +30,4 @@ test_new_qualified_disabled_repo_still_works() {
   run new "${ARTENV_ROOT}/.fixtures/proj" -t myrepo/alpha
   assert_status "${status}" 0
   assert_file "${ARTENV_ROOT}/.fixtures/proj/file.txt"
-  _templates_cleanup
 }
