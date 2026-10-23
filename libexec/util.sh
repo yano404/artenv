@@ -365,8 +365,62 @@ template_repo_enabled() {
   [[ "$(template_repo_enabled_flag "$1")" == "true" ]]
 }
 
+# Die unless <name> is usable as a template repo name. `local' is reserved for
+# user-managed templates; leading `.' or `-' would hide the file or look like a
+# flag.
+validate_template_repo_name() {
+  local name="$1"
+  validate_template_component "${name}"
+  [[ "${name}" != "local" ]] || die "reserved repository name: local"
+  case "${name}" in
+    .*|-*) die "invalid repository name: ${name}" ;;
+  esac
+  return 0
+}
+
+# Print the config file path for a template repo.
+template_repo_conf() {
+  printf '%s/template-repos/%s.toml\n' "${ARTENV_ROOT}" "$1"
+}
+
+# Print a string as a TOML basic string (with quotes). Dies on newlines.
+toml_quote() {
+  local s="$1"
+  [[ "${s}" != *$'\n'* && "${s}" != *$'\r'* ]] || die "invalid value (contains a newline)"
+  s="${s//\\/\\\\}"
+  s="${s//\"/\\\"}"
+  printf '"%s"\n' "${s}"
+}
+
+# Set the `enabled' flag in a repo conf, preserving every other line. yq cannot
+# write TOML tables, so this is a text edit (see set_archived_flag).
+set_template_repo_enabled_flag() {
+  local conf="$1"
+  local value="$2"
+  require_file "${conf}"
+
+  local dir tmp done=0 line
+  dir="$(dirname -- "${conf}")"
+  tmp="$(mktemp "${dir}/.tmp.enabled.XXXXXX")"
+
+  while IFS= read -r line || [[ -n "${line}" ]]; do
+    if [[ "${done}" -eq 0 && "${line}" =~ ^enabled[[:space:]]*= ]]; then
+      printf 'enabled     = %s\n' "${value}" >> "${tmp}"
+      done=1
+    else
+      printf '%s\n' "${line}" >> "${tmp}"
+    fi
+  done < "${conf}"
+  if [[ "${done}" -eq 0 ]]; then
+    printf 'enabled = %s\n' "${value}" >> "${tmp}"
+  fi
+
+  mv -- "${tmp}" "${conf}"
+}
+
 # Print usable templates as "<namespace>/<template>", sorted. Includes local/*
-# unconditionally and <repo>/* for enabled repos only.
+# unconditionally and <repo>/* for configured, enabled repos only (orphan
+# caches without a repo config are hidden).
 list_templates() {
   local base="${ARTENV_ROOT}/templates"
   [[ -d "${base}" ]] || return 0
@@ -379,6 +433,7 @@ list_templates() {
   for ns_path in "${ns_dirs[@]}"; do
     ns="$(basename "${ns_path}")"
     if [[ "${ns}" != "local" ]]; then
+      [[ -f "$(template_repo_conf "${ns}")" ]] || continue
       template_repo_enabled "${ns}" || continue
     fi
     local -a tmpls=()
