@@ -36,6 +36,7 @@ _HELP_COMMANDS=(
   "templates disable-repo"
   "templates repos"
   "templates update"
+  "templates add-repo"
   "templates remove-repo"
   "init"
   "upgrade"

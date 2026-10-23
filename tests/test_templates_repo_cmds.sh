@@ -191,3 +191,125 @@ test_remove_repo_errors() {
   assert_status "${status}" 1
   assert_contains "${output}" "unknown option: -x"
 }
+
+# --- templates add-repo ---------------------------------------------------
+
+test_add_repo_registers_and_fetches() {
+  local repo; repo="$(make_template_repo alpha)"
+  local conf="${ARTENV_ROOT}/template-repos/ribf.toml"
+  run templates add-repo ribf "file://${repo}"
+  assert_status "${status}" 0
+  assert_contains "${output}" "added"
+  assert_contains "${output}" "cloned"
+  [[ "$(toml_field "${conf}" repo url)" == "file://${repo}" ]] || fail "url mismatch"
+  [[ "$(toml_field "${conf}" repo enabled)" == "true" ]] || fail "enabled should be true"
+  run templates ls
+  assert_contains "${output}" "ribf/alpha"
+}
+
+test_add_repo_ref_and_description() {
+  local repo; repo="$(make_template_repo alpha)"
+  local conf="${ARTENV_ROOT}/template-repos/ribf.toml"
+  run templates add-repo ribf "file://${repo}" --ref main --description "RIBF group"
+  assert_status "${status}" 0
+  [[ "$(toml_field "${conf}" repo ref)" == "main" ]] || fail "ref mismatch"
+  [[ "$(toml_field "${conf}" repo description)" == "RIBF group" ]] || fail "description mismatch"
+}
+
+test_add_repo_options_before_positionals() {
+  run templates add-repo --no-fetch --description "d" ribf "file:///x"
+  assert_status "${status}" 0
+  assert_file "${ARTENV_ROOT}/template-repos/ribf.toml"
+}
+
+test_add_repo_fetch_failure_rolls_back() {
+  run templates add-repo ribf "file://${ARTENV_ROOT}/.fixtures/nope"
+  assert_status "${status}" 1
+  assert_contains "${output}" "rolled back"
+  assert_no_file "${ARTENV_ROOT}/template-repos/ribf.toml"
+  assert_no_file "${ARTENV_ROOT}/templates/ribf"
+}
+
+test_add_repo_no_fetch_keeps_registration() {
+  run templates add-repo ribf "file://${ARTENV_ROOT}/.fixtures/nope" --no-fetch
+  assert_status "${status}" 0
+  assert_file "${ARTENV_ROOT}/template-repos/ribf.toml"
+  assert_no_file "${ARTENV_ROOT}/templates/ribf"
+  assert_contains "${output}" "artenv templates update ribf"
+}
+
+test_add_repo_duplicate_dies() {
+  local conf="${ARTENV_ROOT}/template-repos/ribf.toml"
+  run templates add-repo ribf "file:///one" --no-fetch
+  assert_status "${status}" 0
+  local before; before="$(cat "${conf}")"
+  run templates add-repo ribf "file:///two" --no-fetch
+  assert_status "${status}" 1
+  assert_contains "${output}" "already exists"
+  [[ "$(cat "${conf}")" == "${before}" ]] || fail "config changed by duplicate add"
+}
+
+test_add_repo_escapes_quotes() {
+  local desc='say "hi" \ back'
+  run templates add-repo ribf "file:///x" --description "${desc}" --no-fetch
+  assert_status "${status}" 0
+  [[ "$(toml_field "${ARTENV_ROOT}/template-repos/ribf.toml" repo description)" == "${desc}" ]] \
+    || fail "description not round-tripped"
+  run templates repos
+  assert_contains "${output}" "${desc}"
+}
+
+test_add_repo_newline_rejected() {
+  run templates add-repo ribf "file:///x" --description $'a\nb' --no-fetch
+  assert_status "${status}" 1
+  assert_contains "${output}" "newline"
+  assert_no_file "${ARTENV_ROOT}/template-repos/ribf.toml"
+}
+
+test_add_repo_orphan_cache_replaced() {
+  mkdir -p "${ARTENV_ROOT}/templates/ribf/stale"
+  run templates add-repo ribf "file:///x" --no-fetch
+  assert_status "${status}" 0
+  assert_contains "${output}" "removed stale cache"
+  assert_no_file "${ARTENV_ROOT}/templates/ribf"
+  run templates ls
+  assert_not_contains "${output}" "ribf/stale"
+}
+
+test_add_repo_invalid_value_leaves_orphan_cache() {
+  mkdir -p "${ARTENV_ROOT}/templates/ribf/stale"
+  run templates add-repo ribf "file:///x" --description $'a\nb' --no-fetch
+  assert_status "${status}" 1
+  [[ -d "${ARTENV_ROOT}/templates/ribf/stale" ]] || fail "cache removed before validation"
+}
+
+test_add_repo_fresh_install_seeds_default() {
+  seed_share_default
+  rm -rf "${ARTENV_ROOT}/template-repos"
+  run templates add-repo ribf "file:///x" --no-fetch
+  assert_status "${status}" 0
+  run templates repos
+  assert_contains "${output}" "default"
+  assert_contains "${output}" "ribf"
+}
+
+test_add_repo_bad_names() {
+  local n
+  for n in local -x .x a/b ..; do
+    run templates add-repo "${n}" "file:///x" --no-fetch
+    assert_status "${status}" 1 "(name ${n})"
+    assert_no_file "${ARTENV_ROOT}/template-repos/${n}.toml"
+  done
+  run templates add-repo
+  assert_status "${status}" 1
+  assert_contains "${output}" "usage: artenv templates add-repo"
+  run templates add-repo ribf
+  assert_status "${status}" 1
+  assert_contains "${output}" "usage: artenv templates add-repo"
+  run templates add-repo ribf file:///x extra
+  assert_status "${status}" 1
+  assert_contains "${output}" "usage: artenv templates add-repo"
+  run templates add-repo ribf ""
+  assert_status "${status}" 1
+  assert_contains "${output}" "url must not be empty"
+}

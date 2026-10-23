@@ -16,6 +16,7 @@ Subcommands:
   ls            List available templates as <repo>/<template>
   repos         List configured template repositories
   update        Clone or update template repositories
+  add-repo      Register a template repository
   enable-repo   Enable a template repository
   disable-repo  Disable a template repository
   remove-repo   Remove a template repository and its cache
