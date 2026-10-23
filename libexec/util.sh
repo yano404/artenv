@@ -393,33 +393,97 @@ toml_quote() {
 }
 
 # Set the `enabled' flag in a repo conf, preserving every other line. yq cannot
-# write TOML tables, so this is a text edit (see set_archived_flag).
+# write TOML tables, so this is a text edit (see set_archived_flag). Only the
+# [repo] table is considered, lines inside multi-line strings are skipped, and a
+# missing key is appended as the last line of [repo]. The result is read back
+# and verified; on mismatch the conf is left untouched and we die.
 set_template_repo_enabled_flag() {
   local conf="$1"
   local value="$2"
   require_file "${conf}"
 
-  local dir tmp done=0 line
+  local dir tmp done=0 in_repo=0 ml="" pending="" line stripped
   dir="$(dirname -- "${conf}")"
   tmp="$(mktemp "${dir}/.tmp.enabled.XXXXXX")"
 
-  while IFS= read -r line || [[ -n "${line}" ]]; do
-    if [[ "${done}" -eq 0 && "${line}" =~ ^[[:space:]]*enabled[[:space:]]*= ]]; then
-      local comment=""
-      if [[ "${line}" =~ ([[:space:]]*#.*)$ ]]; then
-        comment="${BASH_REMATCH[1]}"
-      fi
-      printf 'enabled     = %s%s\n' "${value}" "${comment}" >> "${tmp}"
-      done=1
-    else
-      printf '%s\n' "${line}" >> "${tmp}"
-    fi
-  done < "${conf}"
-  if [[ "${done}" -eq 0 ]]; then
-    printf 'enabled = %s\n' "${value}" >> "${tmp}"
-  fi
+  local new_line
+  new_line="$(printf 'enabled     = %s' "${value}")"
 
-  mv -- "${tmp}" "${conf}"
+  while IFS= read -r line || [[ -n "${line}" ]]; do
+    if [[ -n "${ml}" ]]; then
+      # inside a multi-line string: copy verbatim, watch for the closing delimiter
+      stripped="${line//"${ml}"/}"
+      if (( (${#line} - ${#stripped}) / 3 % 2 == 1 )); then
+        ml=""
+      fi
+      printf '%s' "${pending}" >> "${tmp}"
+      pending=""
+      printf '%s\n' "${line}" >> "${tmp}"
+      continue
+    fi
+
+    if [[ "${line}" =~ ^[[:space:]]*\[ ]]; then
+      # table header: leaving [repo] without having seen the key -> insert it
+      if [[ "${in_repo}" -eq 1 && "${done}" -eq 0 ]]; then
+        printf '%s\n' "${new_line}" >> "${tmp}"
+        done=1
+      fi
+      printf '%s' "${pending}" >> "${tmp}"
+      pending=""
+      in_repo=0
+      if [[ "${line}" =~ ^[[:space:]]*\[repo\][[:space:]]*(#.*)?$ ]]; then
+        in_repo=1
+      fi
+      printf '%s\n' "${line}" >> "${tmp}"
+      continue
+    fi
+
+    if [[ "${in_repo}" -eq 1 && "${done}" -eq 0 ]]; then
+      if [[ "${line}" =~ ^[[:space:]]*$ ]]; then
+        # hold blank lines so a new key lands before the separator
+        pending+=$'\n'
+        continue
+      fi
+      if [[ "${line}" =~ ^[[:space:]]*enabled[[:space:]]*= ]]; then
+        local comment=""
+        if [[ "${line}" =~ ([[:space:]]*#.*)$ ]]; then
+          comment="${BASH_REMATCH[1]}"
+        fi
+        printf '%s' "${pending}" >> "${tmp}"
+        pending=""
+        printf '%s%s\n' "${new_line}" "${comment}" >> "${tmp}"
+        done=1
+        continue
+      fi
+    fi
+
+    printf '%s' "${pending}" >> "${tmp}"
+    pending=""
+    printf '%s\n' "${line}" >> "${tmp}"
+
+    # does this line open a multi-line string?
+    local d
+    for d in '"""' "'''"; do
+      stripped="${line//"${d}"/}"
+      if (( (${#line} - ${#stripped}) / 3 % 2 == 1 )); then
+        ml="${d}"
+        break
+      fi
+    done
+  done < "${conf}"
+
+  if [[ "${in_repo}" -eq 1 && "${done}" -eq 0 ]]; then
+    printf '%s\n' "${new_line}" >> "${tmp}"
+  fi
+  printf '%s' "${pending}" >> "${tmp}"
+
+  local got=""
+  if got="$(toml_get "${tmp}" repo enabled "")" && [[ "${got}" == "${value}" ]]; then
+    mv -- "${tmp}" "${conf}"
+  else
+    rm -f -- "${tmp}"
+    die "could not update 'enabled' in ${conf}; edit it by hand"
+  fi
 }
 
 # Print usable templates as "<namespace>/<template>", sorted. Includes local/*

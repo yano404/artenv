@@ -378,3 +378,48 @@ test_add_repo_help_ref_mentions_commit() {
   assert_status "${status}" 0
   assert_contains "${output}" "Branch, tag or commit"
 }
+
+test_disable_repo_ignores_enabled_in_multiline_string() {
+  local conf="${ARTENV_ROOT}/template-repos/a.toml"
+  mkdir -p "${ARTENV_ROOT}/template-repos"
+  printf '[repo]\nurl = "file:///x"\ndescription = """\nnote:\nenabled = true\n"""\nenabled = true\n' > "${conf}"
+  local before; before="$(toml_field "${conf}" repo description)"
+  run templates disable-repo a
+  assert_status "${status}" 0
+  assert_contains "${output}" "a was disabled"
+  [[ "$(toml_field "${conf}" repo enabled)" == "false" ]] || fail "repo.enabled should be false"
+  [[ "$(toml_field "${conf}" repo description)" == "${before}" ]] || fail "description must be unchanged"
+  run templates enable-repo a
+  assert_status "${status}" 0
+  assert_contains "${output}" "a was enabled"
+  [[ "$(toml_field "${conf}" repo enabled)" == "true" ]] || fail "repo.enabled should be true again"
+  [[ "$(toml_field "${conf}" repo description)" == "${before}" ]] || fail "description must be unchanged after enable"
+}
+
+test_disable_repo_inserts_enabled_inside_repo_table() {
+  local conf="${ARTENV_ROOT}/template-repos/b.toml"
+  mkdir -p "${ARTENV_ROOT}/template-repos"
+  printf '[repo]\nurl = "file:///x"\n\n[extra]\nfoo = 1\n' > "${conf}"
+  run templates disable-repo b
+  assert_status "${status}" 0
+  assert_contains "${output}" "b was disabled"
+  [[ "$(toml_field "${conf}" repo enabled)" == "false" ]] || fail "repo.enabled should be false"
+  [[ "$(toml_field "${conf}" extra foo)" == "1" ]] || fail "extra.foo should be preserved"
+  [[ "$(yq -p toml -oy -r '.extra | has("enabled")' "${conf}")" == "false" ]] || fail "[extra] must not gain an enabled key"
+}
+
+test_disable_repo_guard_fails_loudly_and_leaves_conf_untouched() {
+  # No [repo] table: the editor has nowhere to put the key, so the read-back
+  # guard must refuse instead of printing a false "was disabled".
+  local conf="${ARTENV_ROOT}/template-repos/c.toml"
+  mkdir -p "${ARTENV_ROOT}/template-repos"
+  printf '[other]\nurl = "file:///x"\n' > "${conf}"
+  local before; before="$(cat "${conf}")"
+  run templates disable-repo c
+  assert_status "${status}" 1
+  assert_contains "${output}" "could not update 'enabled'"
+  assert_not_contains "${output}" "was disabled"
+  [[ "$(cat "${conf}")" == "${before}" ]] || fail "conf must be untouched"
+  local leaked=("${ARTENV_ROOT}/template-repos"/.tmp.*)
+  [[ ! -e "${leaked[0]}" ]] || fail "temp file leaked"
+}
