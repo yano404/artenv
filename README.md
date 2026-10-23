@@ -230,6 +230,10 @@ Template commands live under the `templates` group (see [Templates](#templates))
 - `templates ls`               : List available templates as `<repo>/<template>`
 - `templates repos`            : List configured template repositories
 - `templates update [repo...]` : Clone or update template repositories
+- `templates add-repo <name> <url> [--ref R] [--description D] [--no-fetch]` : Register a template repository and fetch it
+- `templates remove-repo <name>`  : Remove a template repository and its cache
+- `templates enable-repo <name>`  : Enable a template repository
+- `templates disable-repo <name>` : Disable a template repository (hidden from listings, still usable via `-t`)
 
 Utility commands:
 
@@ -451,7 +455,28 @@ Each repository is described in its own file, `template-repos/<name>.toml`.
 The bundled default, `template-repos/default.toml`, is created automatically
 on first run (seeded from `share/template-repos/default.toml`). This runtime
 file is gitignored and yours to edit freely — changes are never overwritten by
-`git pull` upgrades. To add another repository, create a new file:
+`git pull` upgrades. To add another repository, register it with one command:
+
+```sh
+artenv templates add-repo ribf https://example.org/ribf/artemis-templates.git
+```
+
+This writes `template-repos/ribf.toml` and fetches the repository immediately;
+if the fetch fails, the registration is rolled back. Use `--ref <ref>` and
+`--description <text>` to set those fields, or `--no-fetch` to only register
+and fetch later with `artenv templates update`.
+
+- `artenv templates remove-repo <name>` deletes the repository's config and its
+  cache without prompting. Projects already created from its templates are not
+  affected. `default` can be removed like any other repository and is not
+  re-seeded; restore it with `artenv templates add-repo default <url>`.
+- `artenv templates disable-repo <name>` / `enable-repo <name>` toggle
+  `enabled`. A disabled repository is hidden from `templates ls` / `new` and
+  skipped by `templates update`, but its cache is kept and
+  `artenv new -t <repo>/<template>` still works.
+
+You can also create or edit `template-repos/<name>.toml` by hand; this keeps
+working exactly as before:
 
 ```toml
 [repo]
