@@ -627,7 +627,7 @@ bootstrap_shared_repo() {
   _bsr_fail() { rm -rf -- "${tmp}" "${repo}"; }
 
   if ! seed_template_commit "${template_path}" "${tmp}" "${rel}"; then
-    _bsr_fail; die "failed to seed temporary repository from template (is the template empty?): ${template_path}"
+    _bsr_fail; die "failed to seed temporary repository from template ${template_path} (empty template or git error)"
   fi
   if ! git -C "${tmp}" push -q -- "${repo}" main; then
     _bsr_fail; die "failed to push seed commit to: ${repo}"
@@ -639,6 +639,71 @@ bootstrap_shared_repo() {
   fi
 
   rm -rf -- "${tmp}"
+  return 0
+}
+
+# Run git non-interactively for remote operations: no credential prompt and
+# ssh BatchMode (a user-set GIT_SSH_COMMAND is kept and extended). The
+# environment is set for this invocation only.
+git_remote() {
+  GIT_TERMINAL_PROMPT=0 GIT_SSH_COMMAND="${GIT_SSH_COMMAND:-ssh} -o BatchMode=yes" git "$@"
+}
+
+# Die unless the remote repository <url> is reachable and completely empty (no
+# branches or tags). <dest> is only used for the join hint. Creates nothing.
+require_empty_remote() {
+  local url="$1"
+  local dest="$2"
+  local errf refs
+  errf="$(mktemp)"
+  if ! refs="$(git_remote ls-remote -- "${url}" 2>"${errf}")"; then
+    printf 'artenv: cannot access remote repository: %s (check the URL and your credentials)\n' "${url}" >&2
+    cat -- "${errf}" >&2
+    rm -f -- "${errf}"
+    exit 1
+  fi
+  rm -f -- "${errf}"
+  if [[ -n "${refs}" ]]; then
+    printf 'artenv: remote repository is not empty: %s\n' "${url}" >&2
+    printf 'to join an existing project: artenv register <env> --version <version> --work %s --repos %s --multiuser\n' "${dest}" "${url}" >&2
+    exit 1
+  fi
+}
+
+# Seed the empty remote repository <url> with the template <template_path> as
+# the first commit on `main` (plain push, never forced). Only the temporary
+# working repo is ever removed; nothing on the remote or named by <url>.
+bootstrap_remote_repo() {
+  local template_path="$1"
+  local url="$2"
+  local rel="$3"
+
+  if [[ -e "${template_path}/.git" ]]; then
+    die "template must not contain a .git entry: ${template_path}"
+  fi
+
+  local tmp errf
+  tmp="$(mktemp -d)"
+  errf="$(mktemp)"
+
+  if ! seed_template_commit "${template_path}" "${tmp}" "${rel}"; then
+    rm -rf -- "${tmp}" "${errf}"
+    die "failed to seed temporary repository from template ${template_path} (empty template or git error)"
+  fi
+  if ! git_remote -C "${tmp}" push -q -- "${url}" main 2>"${errf}"; then
+    printf 'artenv: failed to push seed commit to: %s\n' "${url}" >&2
+    cat -- "${errf}" >&2
+    rm -rf -- "${tmp}" "${errf}"
+    exit 1
+  fi
+  rm -rf -- "${tmp}" "${errf}"
+
+  if ! git_remote ls-remote --heads -- "${url}" 2>/dev/null | grep -q 'refs/heads/main'; then
+    die "seeded repository has no main branch: ${url}"
+  fi
+  if ! git_remote ls-remote --symref -- "${url}" HEAD 2>/dev/null | grep -q 'ref: refs/heads/main'; then
+    printf "artenv: warning: the remote's default branch is not 'main'; members' clones will be empty until it is set to 'main' (repository settings, or 'git symbolic-ref HEAD refs/heads/main' in the server-side bare repo)\n" >&2
+  fi
   return 0
 }
 
