@@ -286,6 +286,37 @@ test_new_multiuser_scp_like_url_is_remote() {
   assert_no_file "${ARTENV_ROOT}/proj"
 }
 
+# host:path without a user (e.g. an ~/.ssh/config Host alias) is ssh to git, so
+# it must take the remote path too -- not create a local dir and push blindly.
+test_new_multiuser_host_alias_is_remote() {
+  seed_cached_template
+  cd "${ARTENV_ROOT}" || return 1
+  local fake
+  fake="$(make_fake_ssh)"
+  GIT_SSH_COMMAND="${fake}" run new --multiuser "${ARTENV_ROOT}/proj" --repo "example-alias:x.git" -t myns/alpha
+  assert_status "${status}" 1
+  assert_contains "${output}" "cannot access remote repository"
+  assert_no_file "${ARTENV_ROOT}/proj"
+  assert_no_file "${ARTENV_ROOT}/example-alias:x.git"
+}
+
+# A local path containing ':' stays local when written as ./host:path (git's
+# own rule: a '/' before the first ':' means a local path).
+test_new_multiuser_dot_slash_colon_path_is_local() {
+  seed_cached_template
+  cd "${ARTENV_ROOT}" || return 1
+  local fake
+  fake="$(make_fake_ssh)"
+  GIT_SSH_COMMAND="${fake}" run new --multiuser "${ARTENV_ROOT}/proj" --repo "./alias:x.git" -t myns/alpha
+  assert_status "${status}" 0
+  repo_has_main_local "${ARTENV_ROOT}/alias:x.git" || fail "expected a seeded local bare repo at ./alias:x.git"
+  # relative --repo is resolved, so the printed register command is absolute
+  assert_contains "${output}" "--repos ${ARTENV_ROOT}/alias:x.git"
+  assert_no_file "${ARTENV_ROOT}/ssh.log"
+}
+
+repo_has_main_local() { git --git-dir="$1" rev-parse -q --verify refs/heads/main >/dev/null; }
+
 # --- 10: non-empty dest dies, nothing is created/removed --------------------
 
 test_new_multiuser_nonempty_dest_dies_untouched() {

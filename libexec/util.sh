@@ -513,13 +513,15 @@ resolve_template() {
 # Helpers for `artenv new --multiuser`: create an empty, group-shared analysis
 # directory and seed a shared upstream bare git repository from a template.
 
-# Return 0 if <dest> looks like a remote destination (URL or scp-like
-# user@host:path), else 1. Used to reject remote repos in the local-only MVP.
+# Return 0 if <dest> is a remote destination by git's own rules, else 1: a URL
+# (scheme://...) or scp-like [user@]host:path, i.e. a ':' with no '/' before
+# it. A local path containing ':' must be written with a '/' before the ':'
+# (e.g. ./host:path), exactly as git requires.
 dest_is_remote() {
   local dest="$1"
   case "${dest}" in
     *://*) return 0 ;;
-    *@*:*) return 0 ;;
+    *:*)   [[ "${dest%%:*}" != */* ]] ;;
     *)     return 1 ;;
   esac
 }

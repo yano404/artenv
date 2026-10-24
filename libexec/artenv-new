@@ -105,8 +105,12 @@ main() {
 
     local dest repo rel
     dest="$(resolve_path "${dir}")"
-    if [[ "${have_repo}" -eq 1 ]]; then
+    if [[ "${have_repo}" -eq 1 && "${repo_remote}" -eq 1 ]]; then
       repo="${repo_dest}"
+    elif [[ "${have_repo}" -eq 1 ]]; then
+      # Absolute, so the seed push (run from a temp repo) and the printed
+      # register command both point at the right place.
+      repo="$(resolve_path "${repo_dest}")"
     else
       repo="${dest}/$(basename -- "${dest}").git"
     fi
