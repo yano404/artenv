@@ -561,6 +561,33 @@ create_shared_dir() {
   fi
 }
 
+# Initialise the (existing, empty) directory <tmp_repo> as a git repo on
+# branch `main` and commit the contents of <template_path> with the message
+# "Seed from template <rel>". The author is the invoking user's git identity
+# when both user.name and user.email resolve; otherwise a repo-local
+# artenv/artenv@localhost identity is set so the commit succeeds in a hermetic
+# environment. GIT_AUTHOR_*/GIT_COMMITTER_* env vars are left untouched.
+# Returns non-zero (never dies) so callers own cleanup and error messages.
+seed_template_commit() {
+  local template_path="$1"
+  local tmp_repo="$2"
+  local rel="$3"
+
+  git init -q -b main -- "${tmp_repo}" || return 1
+
+  local name email
+  name="$(git -C "${tmp_repo}" config --get user.name 2>/dev/null || true)"
+  email="$(git -C "${tmp_repo}" config --get user.email 2>/dev/null || true)"
+  if [[ -z "${name}" || -z "${email}" ]]; then
+    git -C "${tmp_repo}" config user.name "artenv" || return 1
+    git -C "${tmp_repo}" config user.email "artenv@localhost" || return 1
+  fi
+
+  cp -rT -- "${template_path}" "${tmp_repo}" || return 1
+  git -C "${tmp_repo}" add -A || return 1
+  git -C "${tmp_repo}" commit -q -m "Seed from template ${rel}" || return 1
+}
+
 # Seed a shared upstream bare repository at <repo> from the template directory
 # <template_path>, committing on branch `main` with a message referencing the
 # template label <rel>. The bare repo is created with --shared=group so group
@@ -594,29 +621,13 @@ bootstrap_shared_repo() {
     die "failed to create bare repository: ${repo}"
   fi
 
-  # Seed via a throwaway working repo. A git identity is set explicitly so the
-  # commit succeeds in a hermetic environment (CI) with no global git config.
+  # Seed via a throwaway working repo (see seed_template_commit).
   local tmp
   tmp="$(mktemp -d)"
   _bsr_fail() { rm -rf -- "${tmp}" "${repo}"; }
 
-  if ! git init -q -b main -- "${tmp}"; then
-    _bsr_fail; die "failed to initialize temporary repository"
-  fi
-  if ! git -C "${tmp}" config user.name "artenv"; then
-    _bsr_fail; die "failed to configure temporary repository"
-  fi
-  if ! git -C "${tmp}" config user.email "artenv@localhost"; then
-    _bsr_fail; die "failed to configure temporary repository"
-  fi
-  if ! cp -rT -- "${template_path}" "${tmp}"; then
-    _bsr_fail; die "failed to copy template into temporary repository"
-  fi
-  if ! git -C "${tmp}" add -A; then
-    _bsr_fail; die "failed to stage template files"
-  fi
-  if ! git -C "${tmp}" commit -q -m "Seed from template ${rel}"; then
-    _bsr_fail; die "failed to commit template files (is the template empty?)"
+  if ! seed_template_commit "${template_path}" "${tmp}" "${rel}"; then
+    _bsr_fail; die "failed to seed temporary repository from template (is the template empty?): ${template_path}"
   fi
   if ! git -C "${tmp}" push -q -- "${repo}" main; then
     _bsr_fail; die "failed to push seed commit to: ${repo}"

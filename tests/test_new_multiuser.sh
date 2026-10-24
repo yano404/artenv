@@ -266,3 +266,29 @@ test_new_multiuser_default_repo_precreated_makes_dest_preexist() {
   # discipline: only a self-created dest is owned by the EXIT trap.
   assert_file "${ARTENV_ROOT}/proj/proj.git/not-empty"
 }
+
+# --- seed commit author identity ---------------------------------------------
+
+test_new_multiuser_seed_author_is_user_identity() {
+  seed_cached_template
+  printf '[user]\n\tname = Alice Example\n\temail = alice@example.org\n' > "${ARTENV_ROOT}/.gitconfig-test"
+  export GIT_CONFIG_NOSYSTEM=1 GIT_CONFIG_GLOBAL="${ARTENV_ROOT}/.gitconfig-test"
+  run new --multiuser "${ARTENV_ROOT}/proj" -t myns/alpha
+  assert_status "${status}" 0
+
+  local author
+  author="$(git -C "${ARTENV_ROOT}/proj/proj.git" log -1 --format='%an <%ae>' main)"
+  [[ "${author}" == "Alice Example <alice@example.org>" ]] || fail "unexpected author: ${author}"
+}
+
+test_new_multiuser_seed_author_falls_back_to_artenv() {
+  seed_cached_template
+  : > "${ARTENV_ROOT}/.gitconfig-test"
+  export GIT_CONFIG_NOSYSTEM=1 GIT_CONFIG_GLOBAL="${ARTENV_ROOT}/.gitconfig-test"
+  run new --multiuser "${ARTENV_ROOT}/proj" -t myns/alpha
+  assert_status "${status}" 0
+
+  local author
+  author="$(git -C "${ARTENV_ROOT}/proj/proj.git" log -1 --format='%an <%ae>' main)"
+  [[ "${author}" == "artenv <artenv@localhost>" ]] || fail "unexpected author: ${author}"
+}
