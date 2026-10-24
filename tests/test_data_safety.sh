@@ -67,6 +67,19 @@ test_purge_keeps_sif_used_by_another_version() {
   assert_no_file "${ARTENV_ROOT}/versions/a.toml"
 }
 
+test_purge_keeps_sif_used_via_another_path() {
+  touch "${ARTENV_ROOT}/images/shared.sif"
+  ln -s "${ARTENV_ROOT}/images" "${ARTENV_ROOT}/img-link"
+  printf '[version]\ntype = "apptainer"\nimage = "%s"\n' \
+    "${ARTENV_ROOT}/images/shared.sif" > "${ARTENV_ROOT}/versions/a.toml"
+  printf '[version]\ntype = "apptainer"\nimage = "%s"\n' \
+    "${ARTENV_ROOT}/img-link/shared.sif" > "${ARTENV_ROOT}/versions/b.toml"
+  run version remove a --purge -y
+  assert_status "${status}" 0
+  assert_contains "${output}" "not removing image used by 'b'"
+  assert_file "${ARTENV_ROOT}/images/shared.sif"
+}
+
 # --- version install --update ---------------------------------------------------
 
 test_update_keeps_other_fields() {
