@@ -206,7 +206,7 @@ typed directly:
 - `info [env]`                 : Print the detail information of an environment
 - `edit [env]`                 : Open an environment's config in $EDITOR
 - `new <dir> [-t <template>]`  : Create a working directory from a template
-- `new --multiuser <dest> [--repo <repo>] -t <template>` : Set up a shared multi-user project skeleton (see [Multi-user projects](#multi-user-projects-artenv-new---multiuser))
+- `new --multiuser <dest> [--repo <path-or-URL>] -t <template>` : Set up a shared multi-user project skeleton (see [Multi-user projects](#multi-user-projects-artenv-new---multiuser))
 - `shell [env]`                : Set or show the activated environment in the current shell
 - `default [env]`              : Set or show the default environment
 
@@ -553,10 +553,36 @@ This creates two artifacts:
   It defaults to `/shared/myproject/myproject.git`; pass `--repo <path>` to put
   it elsewhere. **The template lands only in this repo.**
 
-MVP is **local bare repositories only**: a `--repo` that looks like a URL or an
-`scp`-style `user@host:path` destination is rejected with "remote destinations
-are not yet supported; use a local path". `-t <template>` is required in
-multiuser mode.
+`-t <template>` is required in multiuser mode.
+
+#### Remote repositories (`--repo <URL>`)
+
+`--repo` also accepts the URL of an existing **empty** remote repository
+(e.g. on GitHub or GitLab); `artenv` seeds it with the template instead of
+creating a local bare repository:
+
+```sh
+artenv new --multiuser /shared/myproject \
+  --repo git@github.com:myorg/myproject.git -t default/standard
+```
+
+- Create the remote **empty**, with default branch `main`, beforehand —
+  `artenv` does not create it. A warning is printed if the remote's default
+  branch is not `main`.
+- The remote is probed first. A non-empty or unreachable remote is refused
+  before anything is created, and `artenv` never force-pushes. To join an
+  existing project instead, use
+  `artenv register <env> --version <v> --work <dir> --repos <URL> --multiuser`.
+- Every member needs access to the remote with their own ssh key or token,
+  because `artlogin` clones with each user's own credentials.
+- Do not embed tokens in URLs; use ssh keys or a git credential helper.
+- `artenv` runs the remote git commands non-interactively
+  (`GIT_TERMINAL_PROMPT=0`, ssh `BatchMode=yes`), so credentials must be
+  available without a prompt (ssh-agent or a credential helper). Because
+  `artenv` sets `GIT_SSH_COMMAND` for these calls, a `core.sshCommand` setting
+  and `GIT_SSH` are not used; ssh settings in `~/.ssh/config` still apply.
+- The seed commit is authored with your git identity (`user.name` /
+  `user.email`) when configured, otherwise as `artenv <artenv@localhost>`.
 
 **Step 2 — register an environment** pointing `--work` at the shared directory
 and `--repos` at the upstream repo (the command is printed for you):

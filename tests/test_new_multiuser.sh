@@ -148,20 +148,193 @@ test_new_multiuser_repo_without_multiuser() {
   assert_contains "${output}" "only valid with --multiuser"
 }
 
-# --- 9: remote --repo (URL and scp-like) are rejected -----------------------
+# --- 9: remote --repo (file:// URL, ssh, scp-like) ---------------------------
 
-test_new_multiuser_repo_url_rejected() {
-  seed_cached_template
-  run new --multiuser "${ARTENV_ROOT}/proj" --repo "https://example.com/x.git" -t myns/alpha
-  assert_status "${status}" 1
-  assert_contains "${output}" "not yet supported"
+# Fake remote: an empty bare repo under the sandbox, addressed via file:// so
+# dest_is_remote matches and git uses a real remote transport. No network.
+make_fake_remote() { # [<head-branch>]
+  git init -q --bare -b "${1:-main}" "${ARTENV_ROOT}/remote.git"
+  printf 'file://%s/remote.git' "${ARTENV_ROOT}"
 }
 
-test_new_multiuser_repo_scp_like_rejected() {
+# Fake ssh: logs its args and fails, so no real network is ever touched.
+make_fake_ssh() { # prints script path
+  local f="${ARTENV_ROOT}/fake-ssh"
+  printf '#!/bin/sh\nprintf "%%s\\n" "$*" >> "%s/ssh.log"\nexit 1\n' "${ARTENV_ROOT}" > "${f}"
+  chmod +x "${f}"
+  printf '%s' "${f}"
+}
+
+test_new_multiuser_remote_seeds_and_prints_register() {
   seed_cached_template
-  run new --multiuser "${ARTENV_ROOT}/proj" --repo "git@host:x.git" -t myns/alpha
+  local url
+  url="$(make_fake_remote)"
+  run new --multiuser "${ARTENV_ROOT}/proj" --repo "${url}" -t myns/alpha
+  assert_status "${status}" 0
+  assert_contains "${output}" "--repos ${url}"
+  assert_contains "${output}" "--work ${ARTENV_ROOT}/proj"
+
+  git clone -q -- "${url}" "${ARTENV_ROOT}/clone-r" 2>/dev/null
+  [[ "$(cat "${ARTENV_ROOT}/clone-r/README")" == "hello" ]] || fail "expected cloned README to say hello"
+  local n
+  n="$(git -C "${ARTENV_ROOT}/clone-r" log --oneline | wc -l)"
+  [[ "${n}" -eq 1 ]] || fail "expected exactly 1 commit, got ${n}"
+
+  [[ -d "${ARTENV_ROOT}/proj" ]] || fail "expected dest dir to exist"
+  [[ -z "$(ls -A "${ARTENV_ROOT}/proj")" ]] || fail "expected dest to be empty"
+  [[ "$(stat -c '%a' "${ARTENV_ROOT}/proj")" == "2770" ]] || fail "expected mode 2770"
+  assert_no_file "${ARTENV_ROOT}/proj/proj.git"
+}
+
+test_new_multiuser_remote_nonempty_refused() {
+  seed_cached_template
+  local url
+  url="$(make_fake_remote)"
+  git clone -q -- "${url}" "${ARTENV_ROOT}/pre" 2>/dev/null
+  git -C "${ARTENV_ROOT}/pre" checkout -q -b other
+  git -C "${ARTENV_ROOT}/pre" -c user.name=t -c user.email=t@t commit -q --allow-empty -m pre
+  git -C "${ARTENV_ROOT}/pre" push -q -- "${url}" other
+  local before after
+  before="$(git ls-remote -- "${url}")"
+  run new --multiuser "${ARTENV_ROOT}/proj" --repo "${url}" -t myns/alpha
   assert_status "${status}" 1
-  assert_contains "${output}" "not yet supported"
+  assert_contains "${output}" "not empty"
+  assert_contains "${output}" "artenv register"
+  assert_no_file "${ARTENV_ROOT}/proj"
+  after="$(git ls-remote -- "${url}")"
+  [[ "${before}" == "${after}" ]] || fail "remote refs changed"
+}
+
+test_new_multiuser_remote_tag_only_refused() {
+  seed_cached_template
+  local url
+  url="$(make_fake_remote)"
+  git init -q -b main "${ARTENV_ROOT}/pre"
+  git -C "${ARTENV_ROOT}/pre" -c user.name=t -c user.email=t@t commit -q --allow-empty -m pre
+  git -C "${ARTENV_ROOT}/pre" tag v1
+  git -C "${ARTENV_ROOT}/pre" push -q -- "${url}" v1
+  run new --multiuser "${ARTENV_ROOT}/proj" --repo "${url}" -t myns/alpha
+  assert_status "${status}" 1
+  assert_contains "${output}" "not empty"
+  assert_no_file "${ARTENV_ROOT}/proj"
+}
+
+test_new_multiuser_remote_unreachable() {
+  seed_cached_template
+  run new --multiuser "${ARTENV_ROOT}/proj" --repo "file://${ARTENV_ROOT}/nope.git" -t myns/alpha
+  assert_status "${status}" 1
+  assert_contains "${output}" "cannot access remote repository"
+  assert_no_file "${ARTENV_ROOT}/proj"
+}
+
+test_new_multiuser_remote_push_rejected_cleans_up() {
+  seed_cached_template
+  local url
+  url="$(make_fake_remote)"
+  mkdir -p "${ARTENV_ROOT}/remote.git/hooks"
+  printf '#!/bin/sh\nexit 1\n' > "${ARTENV_ROOT}/remote.git/hooks/pre-receive"
+  chmod +x "${ARTENV_ROOT}/remote.git/hooks/pre-receive"
+  run new --multiuser "${ARTENV_ROOT}/proj" --repo "${url}" -t myns/alpha
+  assert_status "${status}" 1
+  assert_contains "${output}" "failed to push"
+  assert_no_file "${ARTENV_ROOT}/proj"
+  [[ -z "$(git ls-remote -- "${url}")" ]] || fail "expected remote to remain empty"
+}
+
+test_new_multiuser_remote_seed_failure_cleans_up() {
+  mkdir -p "${ARTENV_ROOT}/templates/myns/empty"
+  local url
+  url="$(make_fake_remote)"
+  run new --multiuser "${ARTENV_ROOT}/proj" --repo "${url}" -t myns/empty
+  assert_status "${status}" 1
+  assert_contains "${output}" "failed to seed"
+  assert_no_file "${ARTENV_ROOT}/proj"
+  [[ -z "$(git ls-remote -- "${url}")" ]] || fail "expected remote to remain empty"
+}
+
+test_new_multiuser_remote_head_not_main_warns() {
+  seed_cached_template
+  local url
+  url="$(make_fake_remote master)"
+  run new --multiuser "${ARTENV_ROOT}/proj" --repo "${url}" -t myns/alpha
+  assert_status "${status}" 0
+  assert_contains "${output}" "default branch is not 'main'"
+  git ls-remote --heads -- "${url}" | grep -q 'refs/heads/main' || fail "expected refs/heads/main on remote"
+}
+
+test_new_multiuser_remote_keeps_user_ssh_command() {
+  seed_cached_template
+  local fake
+  fake="$(make_fake_ssh)"
+  GIT_SSH_COMMAND="${fake} -o Foo=bar" run new --multiuser "${ARTENV_ROOT}/proj" --repo "ssh://example.invalid/x.git" -t myns/alpha
+  assert_status "${status}" 1
+  assert_contains "${output}" "cannot access remote repository"
+  local log
+  log="$(cat "${ARTENV_ROOT}/ssh.log")"
+  assert_contains "${log}" "-o Foo=bar"
+  assert_contains "${log}" "-o BatchMode=yes"
+  assert_no_file "${ARTENV_ROOT}/proj"
+}
+
+test_new_multiuser_scp_like_url_is_remote() {
+  seed_cached_template
+  local fake
+  fake="$(make_fake_ssh)"
+  GIT_SSH_COMMAND="${fake}" run new --multiuser "${ARTENV_ROOT}/proj" --repo "git@example.invalid:x.git" -t myns/alpha
+  assert_status "${status}" 1
+  assert_contains "${output}" "cannot access remote repository"
+  assert_no_file "${ARTENV_ROOT}/proj"
+}
+
+# host:path without a user (e.g. an ~/.ssh/config Host alias) is ssh to git, so
+# it must take the remote path too -- not create a local dir and push blindly.
+test_new_multiuser_host_alias_is_remote() {
+  seed_cached_template
+  cd "${ARTENV_ROOT}" || return 1
+  local fake
+  fake="$(make_fake_ssh)"
+  GIT_SSH_COMMAND="${fake}" run new --multiuser "${ARTENV_ROOT}/proj" --repo "example-alias:x.git" -t myns/alpha
+  assert_status "${status}" 1
+  assert_contains "${output}" "cannot access remote repository"
+  assert_no_file "${ARTENV_ROOT}/proj"
+  assert_no_file "${ARTENV_ROOT}/example-alias:x.git"
+}
+
+# A local path containing ':' stays local when written as ./host:path (git's
+# own rule: a '/' before the first ':' means a local path).
+test_new_multiuser_dot_slash_colon_path_is_local() {
+  seed_cached_template
+  cd "${ARTENV_ROOT}" || return 1
+  local fake
+  fake="$(make_fake_ssh)"
+  GIT_SSH_COMMAND="${fake}" run new --multiuser "${ARTENV_ROOT}/proj" --repo "./alias:x.git" -t myns/alpha
+  assert_status "${status}" 0
+  repo_has_main_local "${ARTENV_ROOT}/alias:x.git" || fail "expected a seeded local bare repo at ./alias:x.git"
+  # relative --repo is resolved, so the printed register command is absolute
+  assert_contains "${output}" "--repos ${ARTENV_ROOT}/alias:x.git"
+  assert_no_file "${ARTENV_ROOT}/ssh.log"
+}
+
+repo_has_main_local() { git --git-dir="$1" rev-parse -q --verify refs/heads/main >/dev/null; }
+
+# --repo inside a not-yet-created <dest> must work: the repo path cannot be
+# canonicalised before <dest> exists.
+test_new_multiuser_repo_inside_new_dest() {
+  seed_cached_template
+  run new --multiuser "${ARTENV_ROOT}/proj" --repo "${ARTENV_ROOT}/proj/custom.git" -t myns/alpha
+  assert_status "${status}" 0
+  repo_has_main_local "${ARTENV_ROOT}/proj/custom.git" || fail "expected a seeded bare repo at proj/custom.git"
+  assert_contains "${output}" "--repos ${ARTENV_ROOT}/proj/custom.git"
+}
+
+# Same, with a relative --repo inside a not-yet-created <dest>.
+test_new_multiuser_relative_repo_inside_new_dest() {
+  seed_cached_template
+  cd "${ARTENV_ROOT}" || return 1
+  run new --multiuser "${ARTENV_ROOT}/proj" --repo "proj/custom.git" -t myns/alpha
+  assert_status "${status}" 0
+  repo_has_main_local "${ARTENV_ROOT}/proj/custom.git" || fail "expected a seeded bare repo at proj/custom.git"
+  assert_contains "${output}" "--repos ${ARTENV_ROOT}/proj/custom.git"
 }
 
 # --- 10: non-empty dest dies, nothing is created/removed --------------------
@@ -265,4 +438,37 @@ test_new_multiuser_default_repo_precreated_makes_dest_preexist() {
   # Pre-existing dest is preserved (not removed) per the documented cleanup
   # discipline: only a self-created dest is owned by the EXIT trap.
   assert_file "${ARTENV_ROOT}/proj/proj.git/not-empty"
+}
+
+# --- seed commit author identity ---------------------------------------------
+
+test_new_multiuser_seed_author_is_user_identity() {
+  seed_cached_template
+  printf '[user]\n\tname = Alice Example\n\temail = alice@example.org\n' > "${ARTENV_ROOT}/.gitconfig-test"
+  export GIT_CONFIG_NOSYSTEM=1 GIT_CONFIG_GLOBAL="${ARTENV_ROOT}/.gitconfig-test"
+  run new --multiuser "${ARTENV_ROOT}/proj" -t myns/alpha
+  assert_status "${status}" 0
+
+  local author
+  author="$(git -C "${ARTENV_ROOT}/proj/proj.git" log -1 --format='%an <%ae>' main)"
+  [[ "${author}" == "Alice Example <alice@example.org>" ]] || fail "unexpected author: ${author}"
+}
+
+test_new_multiuser_seed_author_falls_back_to_artenv() {
+  seed_cached_template
+  : > "${ARTENV_ROOT}/.gitconfig-test"
+  export GIT_CONFIG_NOSYSTEM=1 GIT_CONFIG_GLOBAL="${ARTENV_ROOT}/.gitconfig-test"
+  run new --multiuser "${ARTENV_ROOT}/proj" -t myns/alpha
+  assert_status "${status}" 0
+
+  local author
+  author="$(git -C "${ARTENV_ROOT}/proj/proj.git" log -1 --format='%an <%ae>' main)"
+  [[ "${author}" == "artenv <artenv@localhost>" ]] || fail "unexpected author: ${author}"
+}
+
+test_new_help_mentions_remote_repo() {
+  run new --help
+  assert_status "${status}" 0
+  assert_contains "${output}" "empty remote"
+  assert_contains "${output}" "URL"
 }
