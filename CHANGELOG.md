@@ -6,6 +6,48 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 Major versions track broad themes rather than strict per-flag SemVer — see
 [Versioning](README.md#versioning).
 
+## [Unreleased]
+
+## [2.6.0] - 2026-10-24
+
+Template repositories managed from the command line. Facilities and
+experiment groups can publish their own template repositories, members add
+and manage them with `artenv templates`, and `artenv new --multiuser` can seed
+an existing remote repository.
+
+### Added
+
+- **`artenv templates add-repo <name> <url> [--ref R] [--description D] [--no-fetch]`**
+  registers a template repository and fetches it immediately. If the fetch
+  fails the registration is rolled back; `--no-fetch` only registers.
+- **`artenv templates remove-repo <name>`** deletes a repository's config and
+  cache without prompting. Projects already created from it are unaffected.
+- **`artenv templates edit-repo <name>`** opens a repository's config in
+  `$VISUAL` / `$EDITOR` and validates the TOML afterwards; run
+  `templates update <name>` to apply url/ref changes.
+- **`artenv templates disable-repo <name>`** hides a repository from
+  `templates ls` / `new` and skips it in `templates update`; qualified
+  `-t <repo>/<template>` still resolves.
+- **`artenv templates enable-repo <name>`** reverses `disable-repo`.
+- Shell completion for the new subcommands, including repository names.
+- **`artenv new --multiuser --repo <URL>`** seeds an existing, empty remote
+  repository with the template. The remote is probed first; non-empty or
+  unreachable remotes are refused before anything is created, and nothing is
+  force-pushed. Remote git runs non-interactively.
+- README: how to create and share a template repository.
+
+### Changed
+
+- Seed commits created by `artenv new --multiuser` use the invoking user's git
+  identity when configured, otherwise `artenv <artenv@localhost>`.
+- `artenv new <dir>` now ends by printing the `artenv register ... --work <dir>`
+  command to run next, like `new --multiuser` already did.
+
+### Fixed
+
+- Template caches whose repository config was deleted are no longer listed by
+  `templates ls` or offered by `new`.
+
 ## [2.5.0] - 2026-10-09
 
 Clearer host/container boundary for Apptainer environments. Only the
@@ -254,6 +296,8 @@ compatible: every old command name still works as a deprecated alias.
 
 - Initial release (symlink-based version/environment management).
 
+[Unreleased]: https://github.com/yano404/artenv/compare/v2.6.0...HEAD
+[2.6.0]: https://github.com/yano404/artenv/compare/v2.5.0...v2.6.0
 [2.5.0]: https://github.com/yano404/artenv/compare/v2.4.1...v2.5.0
 [2.4.1]: https://github.com/yano404/artenv/compare/v2.4.0...v2.4.1
 [2.4.0]: https://github.com/yano404/artenv/compare/v2.3.1...v2.4.0

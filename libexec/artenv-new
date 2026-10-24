@@ -19,14 +19,16 @@ it prints the `artenv register ... --multiuser` command to run next.
 Modes:
   <dir> [-t T]            Scaffold: copy the template into <dir>.
   --multiuser <dest>      Create the shared dir <dest> (empty, group-shared) and
-                          seed an upstream bare repo from -t. The template lands
-                          ONLY in the repo, not in <dest>.
+                          seed an upstream repo from -t (a local bare repo, or an
+                          existing empty remote). The template lands ONLY in the
+                          repo, not in <dest>.
 
 Options:
   -t, --template [<repo>/]<name>   Template to use (prompted if omitted on a tty)
       --multiuser                  Multi-user skeleton mode
-      --repo <repo>                Upstream repo location (multiuser; local path
-                                   only). Default <dest>/<basename>.git
+      --repo <repo>                Upstream repo location (multiuser; local path or the
+                                   URL of an existing, empty remote repository).
+                                   Default <dest>/<basename>.git
   -h, --help                       Show this help
 EOS
 }
@@ -92,8 +94,9 @@ main() {
   # --- multiuser skeleton mode ----------------------------------------------
   if [[ "${multiuser}" -eq 1 ]]; then
     [[ -n "${dir}" ]] || die "artenv new --multiuser requires a shared directory: artenv new --multiuser <dest> -t <template>"
+    local repo_remote=0
     if [[ "${have_repo}" -eq 1 ]] && dest_is_remote "${repo_dest}"; then
-      die "remote destinations are not yet supported; use a local path"
+      repo_remote=1
     fi
 
     # -t wins; on a tty prompt to select; non-tty without -t dies (mirrors
@@ -102,8 +105,14 @@ main() {
 
     local dest repo rel
     dest="$(resolve_path "${dir}")"
-    if [[ "${have_repo}" -eq 1 ]]; then
+    if [[ "${have_repo}" -eq 1 && "${repo_remote}" -eq 1 ]]; then
       repo="${repo_dest}"
+    elif [[ "${have_repo}" -eq 1 ]]; then
+      # Absolute, so the seed push (run from a temp repo) and the printed
+      # register command both point at the right place. Not canonicalised:
+      # the repo may live inside a <dest> that does not exist yet.
+      repo="${repo_dest}"
+      [[ "${repo}" == /* ]] || repo="${PWD}/${repo#./}"
     else
       repo="${dest}/$(basename -- "${dest}").git"
     fi
@@ -116,15 +125,25 @@ main() {
     # failure (its _ne_* stays empty), so we never delete a user's directory.
     local dest_preexisted=0 repo_preexisted=0
     [[ -e "${dest}" ]] && dest_preexisted=1
-    [[ -e "${repo}" ]] && repo_preexisted=1
+    if [[ "${repo_remote}" -eq 0 && -e "${repo}" ]]; then
+      repo_preexisted=1
+    fi
     _ne_dest=""; _ne_repo=""
     [[ "${dest_preexisted}" -eq 0 ]] && _ne_dest="${dest}"
     trap 'rm -rf -- "${_ne_repo:-}" "${_ne_dest:-}"' EXIT
 
     require_writable_dir "$(dirname -- "${dest}")" "shared directory parent"
-    create_shared_dir "${dest}"
-    [[ "${repo_preexisted}" -eq 0 ]] && _ne_repo="${repo}"
-    bootstrap_shared_repo "${template_path}" "${repo}" "${rel}"
+    if [[ "${repo_remote}" -eq 1 ]]; then
+      # Probe before creating anything; _ne_repo stays empty for remotes so the
+      # trap can never remove anything derived from the URL.
+      require_empty_remote "${repo}" "${dest}"
+      create_shared_dir "${dest}"
+      bootstrap_remote_repo "${template_path}" "${repo}" "${rel}"
+    else
+      create_shared_dir "${dest}"
+      [[ "${repo_preexisted}" -eq 0 ]] && _ne_repo="${repo}"
+      bootstrap_shared_repo "${template_path}" "${repo}" "${rel}"
+    fi
 
     trap - EXIT
     printf 'created shared analysis directory %s (empty, group-shared)\n' "${dest}"
@@ -157,6 +176,9 @@ main() {
 
   local rel="${template_path#"${templates_root}/"}"
   printf 'created %s from template %s\n' "${target}" "${rel}"
+  printf '\n'
+  printf 'Next: register an environment for this directory:\n'
+  printf '  artenv register <env> --version <version> --work %s\n' "${target}"
 }
 
 main "$@"

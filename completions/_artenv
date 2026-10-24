@@ -20,6 +20,14 @@ _artenv_list_versions() {
   done
 }
 
+_artenv_list_template_repos() {
+  [[ -n "${ARTENV_ROOT:-}" && -d "${ARTENV_ROOT}/template-repos" ]] || return
+  local f
+  for f in "${ARTENV_ROOT}/template-repos"/*.toml(N); do
+    basename "${f}" .toml
+  done
+}
+
 _artenv_list_templates() {
   command artenv templates ls 2>/dev/null
 }
@@ -58,7 +66,20 @@ _artenv() {
     templates)
       # `artenv templates <sub>`
       if (( CURRENT == 3 )); then
-        compadd -- ls repos update -h
+        compadd -- ls repos update add-repo edit-repo remove-repo enable-repo disable-repo -h
+      else
+        case "${words[3]}" in
+          edit-repo|remove-repo|enable-repo|disable-repo)
+            local -a trepos
+            trepos=("${(@f)$(_artenv_list_template_repos)}")
+            compadd -- "${trepos[@]}"
+            ;;
+          add-repo)
+            if [[ "${words[CURRENT]}" == -* ]]; then
+              compadd -- --ref --description --no-fetch -h --help
+            fi
+            ;;
+        esac
       fi
       return 0
       ;;

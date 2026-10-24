@@ -365,8 +365,66 @@ template_repo_enabled() {
   [[ "$(template_repo_enabled_flag "$1")" == "true" ]]
 }
 
+# Die unless <name> is usable as a template repo name. `local' is reserved for
+# user-managed templates; leading `.' or `-' would hide the file or look like a
+# flag.
+validate_template_repo_name() {
+  local name="$1"
+  validate_template_component "${name}"
+  [[ "${name}" != "local" ]] || die "reserved repository name: local"
+  case "${name}" in
+    .*|-*) die "invalid repository name: ${name}" ;;
+  esac
+  return 0
+}
+
+# Print the config file path for a template repo.
+template_repo_conf() {
+  printf '%s/template-repos/%s.toml\n' "${ARTENV_ROOT}" "$1"
+}
+
+# Print a string as a TOML basic string (with quotes). Dies on newlines.
+toml_quote() {
+  local s="$1"
+  [[ "${s}" != *$'\n'* && "${s}" != *$'\r'* ]] || die "invalid value (contains a newline)"
+  s="${s//\\/\\\\}"
+  s="${s//\"/\\\"}"
+  printf '"%s"\n' "${s}"
+}
+
+# Set the `enabled' flag in a repo conf, preserving every other line. yq cannot
+# write TOML tables, so this is a text edit (see set_archived_flag).
+set_template_repo_enabled_flag() {
+  local conf="$1"
+  local value="$2"
+  require_file "${conf}"
+
+  local dir tmp done=0 line
+  dir="$(dirname -- "${conf}")"
+  tmp="$(mktemp "${dir}/.tmp.enabled.XXXXXX")"
+
+  while IFS= read -r line || [[ -n "${line}" ]]; do
+    if [[ "${done}" -eq 0 && "${line}" =~ ^[[:space:]]*enabled[[:space:]]*= ]]; then
+      local comment=""
+      if [[ "${line}" =~ ([[:space:]]*#.*)$ ]]; then
+        comment="${BASH_REMATCH[1]}"
+      fi
+      printf 'enabled     = %s%s\n' "${value}" "${comment}" >> "${tmp}"
+      done=1
+    else
+      printf '%s\n' "${line}" >> "${tmp}"
+    fi
+  done < "${conf}"
+  if [[ "${done}" -eq 0 ]]; then
+    printf 'enabled = %s\n' "${value}" >> "${tmp}"
+  fi
+
+  mv -- "${tmp}" "${conf}"
+}
+
 # Print usable templates as "<namespace>/<template>", sorted. Includes local/*
-# unconditionally and <repo>/* for enabled repos only.
+# unconditionally and <repo>/* for configured, enabled repos only (orphan
+# caches without a repo config are hidden).
 list_templates() {
   local base="${ARTENV_ROOT}/templates"
   [[ -d "${base}" ]] || return 0
@@ -379,6 +437,7 @@ list_templates() {
   for ns_path in "${ns_dirs[@]}"; do
     ns="$(basename "${ns_path}")"
     if [[ "${ns}" != "local" ]]; then
+      [[ -f "$(template_repo_conf "${ns}")" ]] || continue
       template_repo_enabled "${ns}" || continue
     fi
     local -a tmpls=()
@@ -454,13 +513,15 @@ resolve_template() {
 # Helpers for `artenv new --multiuser`: create an empty, group-shared analysis
 # directory and seed a shared upstream bare git repository from a template.
 
-# Return 0 if <dest> looks like a remote destination (URL or scp-like
-# user@host:path), else 1. Used to reject remote repos in the local-only MVP.
+# Return 0 if <dest> is a remote destination by git's own rules, else 1: a URL
+# (scheme://...) or scp-like [user@]host:path, i.e. a ':' with no '/' before
+# it. A local path containing ':' must be written with a '/' before the ':'
+# (e.g. ./host:path), exactly as git requires.
 dest_is_remote() {
   local dest="$1"
   case "${dest}" in
     *://*) return 0 ;;
-    *@*:*) return 0 ;;
+    *:*)   [[ "${dest%%:*}" != */* ]] ;;
     *)     return 1 ;;
   esac
 }
@@ -502,6 +563,33 @@ create_shared_dir() {
   fi
 }
 
+# Initialise the (existing, empty) directory <tmp_repo> as a git repo on
+# branch `main` and commit the contents of <template_path> with the message
+# "Seed from template <rel>". The author is the invoking user's git identity
+# when both user.name and user.email resolve; otherwise a repo-local
+# artenv/artenv@localhost identity is set so the commit succeeds in a hermetic
+# environment. GIT_AUTHOR_*/GIT_COMMITTER_* env vars are left untouched.
+# Returns non-zero (never dies) so callers own cleanup and error messages.
+seed_template_commit() {
+  local template_path="$1"
+  local tmp_repo="$2"
+  local rel="$3"
+
+  git init -q -b main -- "${tmp_repo}" || return 1
+
+  local name email
+  name="$(git -C "${tmp_repo}" config --get user.name 2>/dev/null || true)"
+  email="$(git -C "${tmp_repo}" config --get user.email 2>/dev/null || true)"
+  if [[ -z "${name}" || -z "${email}" ]]; then
+    git -C "${tmp_repo}" config user.name "artenv" || return 1
+    git -C "${tmp_repo}" config user.email "artenv@localhost" || return 1
+  fi
+
+  cp -rT -- "${template_path}" "${tmp_repo}" || return 1
+  git -C "${tmp_repo}" add -A || return 1
+  git -C "${tmp_repo}" commit -q -m "Seed from template ${rel}" || return 1
+}
+
 # Seed a shared upstream bare repository at <repo> from the template directory
 # <template_path>, committing on branch `main` with a message referencing the
 # template label <rel>. The bare repo is created with --shared=group so group
@@ -535,29 +623,13 @@ bootstrap_shared_repo() {
     die "failed to create bare repository: ${repo}"
   fi
 
-  # Seed via a throwaway working repo. A git identity is set explicitly so the
-  # commit succeeds in a hermetic environment (CI) with no global git config.
+  # Seed via a throwaway working repo (see seed_template_commit).
   local tmp
   tmp="$(mktemp -d)"
   _bsr_fail() { rm -rf -- "${tmp}" "${repo}"; }
 
-  if ! git init -q -b main -- "${tmp}"; then
-    _bsr_fail; die "failed to initialize temporary repository"
-  fi
-  if ! git -C "${tmp}" config user.name "artenv"; then
-    _bsr_fail; die "failed to configure temporary repository"
-  fi
-  if ! git -C "${tmp}" config user.email "artenv@localhost"; then
-    _bsr_fail; die "failed to configure temporary repository"
-  fi
-  if ! cp -rT -- "${template_path}" "${tmp}"; then
-    _bsr_fail; die "failed to copy template into temporary repository"
-  fi
-  if ! git -C "${tmp}" add -A; then
-    _bsr_fail; die "failed to stage template files"
-  fi
-  if ! git -C "${tmp}" commit -q -m "Seed from template ${rel}"; then
-    _bsr_fail; die "failed to commit template files (is the template empty?)"
+  if ! seed_template_commit "${template_path}" "${tmp}" "${rel}"; then
+    _bsr_fail; die "failed to seed temporary repository from template ${template_path} (empty template or git error)"
   fi
   if ! git -C "${tmp}" push -q -- "${repo}" main; then
     _bsr_fail; die "failed to push seed commit to: ${repo}"
@@ -569,6 +641,86 @@ bootstrap_shared_repo() {
   fi
 
   rm -rf -- "${tmp}"
+  return 0
+}
+
+# Run git non-interactively for remote operations: no credential prompt and
+# ssh BatchMode (a user-set GIT_SSH_COMMAND is kept and extended). The
+# environment is set for this invocation only.
+git_remote() {
+  GIT_TERMINAL_PROMPT=0 GIT_SSH_COMMAND="${GIT_SSH_COMMAND:-ssh} -o BatchMode=yes" git "$@"
+}
+
+# Die unless the remote repository <url> is reachable and completely empty (no
+# branches or tags). <dest> is only used for the join hint. Creates nothing.
+require_empty_remote() {
+  local url="$1"
+  local dest="$2"
+  local errf refs
+  errf="$(mktemp)"
+  if ! refs="$(git_remote ls-remote -- "${url}" 2>"${errf}")"; then
+    printf 'artenv: cannot access remote repository: %s (check the URL and your credentials)\n' "${url}" >&2
+    cat -- "${errf}" >&2
+    rm -f -- "${errf}"
+    exit 1
+  fi
+  rm -f -- "${errf}"
+  if [[ -n "${refs}" ]]; then
+    printf 'artenv: remote repository is not empty: %s\n' "${url}" >&2
+    printf 'to join an existing project: artenv register <env> --version <version> --work %s --repos %s --multiuser\n' "${dest}" "${url}" >&2
+    exit 1
+  fi
+}
+
+# Seed the empty remote repository <url> with the template <template_path> as
+# the first commit on `main` (plain push, never forced). Only the temporary
+# working repo is ever removed; nothing on the remote or named by <url>.
+bootstrap_remote_repo() {
+  local template_path="$1"
+  local url="$2"
+  local rel="$3"
+
+  if [[ -e "${template_path}/.git" ]]; then
+    die "template must not contain a .git entry: ${template_path}"
+  fi
+
+  local tmp errf
+  tmp="$(mktemp -d)"
+  errf="$(mktemp)"
+
+  if ! seed_template_commit "${template_path}" "${tmp}" "${rel}"; then
+    rm -rf -- "${tmp}" "${errf}"
+    die "failed to seed temporary repository from template ${template_path} (empty template or git error)"
+  fi
+  if ! git_remote -C "${tmp}" push -q -- "${url}" main 2>"${errf}"; then
+    printf 'artenv: failed to push seed commit to: %s\n' "${url}" >&2
+    cat -- "${errf}" >&2
+    rm -rf -- "${tmp}" "${errf}"
+    exit 1
+  fi
+  rm -rf -- "${tmp}"
+
+  # The push succeeded: from here on the remote is seeded, so a verification
+  # problem must only warn (dying would make the EXIT trap delete <dest>).
+  local out=""
+  if ! out="$(git_remote ls-remote --heads -- "${url}" 2>"${errf}")"; then
+    printf 'artenv: warning: pushed the seed commit but could not verify %s; check the remote\n' "${url}" >&2
+    cat -- "${errf}" >&2
+    rm -f -- "${errf}"
+    return 0
+  fi
+  if ! grep -q -E $'\trefs/heads/main$' <<< "${out}"; then
+    printf 'artenv: warning: pushed the seed commit but could not verify %s (no main branch listed); check the remote\n' "${url}" >&2
+    rm -f -- "${errf}"
+    return 0
+  fi
+  if ! out="$(git_remote ls-remote --symref -- "${url}" HEAD 2>/dev/null)"; then
+    out=""
+  fi
+  if ! grep -q -x -F $'ref: refs/heads/main\tHEAD' <<< "${out}"; then
+    printf "artenv: warning: the remote's default branch is not 'main'; members' clones will be empty until it is set to 'main' (repository settings, or 'git symbolic-ref HEAD refs/heads/main' in the server-side bare repo)\n" >&2
+  fi
+  rm -f -- "${errf}"
   return 0
 }
 

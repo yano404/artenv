@@ -1,6 +1,10 @@
 artenv
 ======
 
+[![GitHub release](https://img.shields.io/github/v/release/yano404/artenv)](https://github.com/yano404/artenv/releases/latest)
+[![CI](https://github.com/yano404/artenv/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/yano404/artenv/actions/workflows/ci.yml)
+[![License](https://img.shields.io/github/license/yano404/artenv)](LICENSE)
+
 artenv is the version and environment manager tool for [Artemis](https://github.com/artemis-dev/artemis).
 artenv enables you to switch multiple artemis versions and analysis environments easily.
 Both native installations and [Apptainer](https://apptainer.org/) container images are supported as artemis versions.
@@ -202,7 +206,7 @@ typed directly:
 - `info [env]`                 : Print the detail information of an environment
 - `edit [env]`                 : Open an environment's config in $EDITOR
 - `new <dir> [-t <template>]`  : Create a working directory from a template
-- `new --multiuser <dest> [--repo <repo>] -t <template>` : Set up a shared multi-user project skeleton (see [Multi-user projects](#multi-user-projects-artenv-new---multiuser))
+- `new --multiuser <dest> [--repo <path-or-URL>] -t <template>` : Set up a shared multi-user project skeleton (see [Multi-user projects](#multi-user-projects-artenv-new---multiuser))
 - `shell [env]`                : Set or show the activated environment in the current shell
 - `default [env]`              : Set or show the default environment
 
@@ -226,6 +230,11 @@ Template commands live under the `templates` group (see [Templates](#templates))
 - `templates ls`               : List available templates as `<repo>/<template>`
 - `templates repos`            : List configured template repositories
 - `templates update [repo...]` : Clone or update template repositories
+- `templates add-repo <name> <url> [--ref R] [--description D] [--no-fetch]` : Register a template repository and fetch it
+- `templates edit-repo <name>`    : Edit a template repository config in $EDITOR
+- `templates remove-repo <name>`  : Remove a template repository and its cache
+- `templates enable-repo <name>`  : Enable a template repository
+- `templates disable-repo <name>` : Disable a template repository (hidden from listings, still usable via `-t`)
 
 Utility commands:
 
@@ -447,7 +456,31 @@ Each repository is described in its own file, `template-repos/<name>.toml`.
 The bundled default, `template-repos/default.toml`, is created automatically
 on first run (seeded from `share/template-repos/default.toml`). This runtime
 file is gitignored and yours to edit freely — changes are never overwritten by
-`git pull` upgrades. To add another repository, create a new file:
+`git pull` upgrades. To add another repository, register it with one command:
+
+```sh
+artenv templates add-repo ribf https://example.org/ribf/artemis-templates.git
+```
+
+This writes `template-repos/ribf.toml` and fetches the repository immediately;
+if the fetch fails, the registration is rolled back. Use `--ref <ref>` and
+`--description <text>` to set those fields, or `--no-fetch` to only register
+and fetch later with `artenv templates update`.
+
+- `artenv templates remove-repo <name>` deletes the repository's config and its
+  cache without prompting. Projects already created from its templates are not
+  affected. `default` can be removed like any other repository and is not
+  re-seeded; restore it with `artenv templates add-repo default <url>`.
+- `artenv templates edit-repo <name>` opens `template-repos/<name>.toml` in
+  `$VISUAL` / `$EDITOR` and checks it is valid TOML afterwards; run
+  `artenv templates update <name>` to apply url/ref changes.
+- `artenv templates disable-repo <name>` / `enable-repo <name>` toggle
+  `enabled`. A disabled repository is hidden from `templates ls` / `new` and
+  skipped by `templates update`, but its cache is kept and
+  `artenv new -t <repo>/<template>` still works.
+
+You can also create or edit `template-repos/<name>.toml` by hand; this keeps
+working exactly as before:
 
 ```toml
 [repo]
@@ -481,6 +514,9 @@ artenv new /path/to/work -t standard
 ```
 
 Without `-t`, `artenv new` prompts you to choose a template interactively.
+`artenv new` only creates the directory; it then prints the
+`artenv register <env> --version <version> --work <dir>` command to turn it into
+an environment.
 
 ### Local templates
 
@@ -492,6 +528,45 @@ fetched, updated, or removed by artenv.
 > runtime data and are gitignored. `template-repos/default.toml` is seeded on
 > first run from the bundled `share/template-repos/default.toml`, so editing it
 > never dirties the working tree or conflicts on upgrade.
+
+### Creating a template repository
+
+A facility or an experiment group can publish its own templates as an ordinary
+git repository. Each top-level directory is one template; files and dot
+directories at the top level are ignored, so the repository's own `README.md`
+is a good place to describe the templates:
+
+```
+ribf-templates/
+├── README.md          # not a template
+├── standard/          # -> ribf/standard
+│   ├── .gitignore
+│   ├── CMakeLists.txt
+│   └── src/
+└── online/            # -> ribf/online
+    └── ...
+```
+
+`artenv new` copies the whole template directory, dot files included, into the
+new working directory. A template is copied as is; artenv does not substitute
+variables in it.
+
+To share the repository, give members its name and URL. Each member registers
+it once:
+
+```sh
+artenv templates add-repo ribf git@example.org:ribf/ribf-templates.git
+artenv new /path/to/work -t ribf/standard
+```
+
+- Members pull new template revisions with `artenv templates update`. Tag
+  releases if members should be able to pin one with
+  `artenv templates add-repo ... --ref <tag>` (or `ref` in the config).
+- For a private repository, every member needs their own read access (SSH key
+  or credential helper).
+- A template used with `artenv new --multiuser` becomes the first commit of the
+  shared repository, so include a `.gitignore` that excludes build and output
+  files.
 
 ### Multi-user projects (`artenv new --multiuser`)
 
@@ -520,10 +595,36 @@ This creates two artifacts:
   It defaults to `/shared/myproject/myproject.git`; pass `--repo <path>` to put
   it elsewhere. **The template lands only in this repo.**
 
-MVP is **local bare repositories only**: a `--repo` that looks like a URL or an
-`scp`-style `user@host:path` destination is rejected with "remote destinations
-are not yet supported; use a local path". `-t <template>` is required in
-multiuser mode.
+`-t <template>` is required in multiuser mode.
+
+#### Remote repositories (`--repo <URL>`)
+
+`--repo` also accepts the URL of an existing **empty** remote repository
+(e.g. on GitHub or GitLab); `artenv` seeds it with the template instead of
+creating a local bare repository:
+
+```sh
+artenv new --multiuser /shared/myproject \
+  --repo git@github.com:myorg/myproject.git -t default/standard
+```
+
+- Create the remote **empty**, with default branch `main`, beforehand —
+  `artenv` does not create it. A warning is printed if the remote's default
+  branch is not `main`.
+- The remote is probed first. A non-empty or unreachable remote is refused
+  before anything is created, and `artenv` never force-pushes. To join an
+  existing project instead, use
+  `artenv register <env> --version <v> --work <dir> --repos <URL> --multiuser`.
+- Every member needs access to the remote with their own ssh key or token,
+  because `artlogin` clones with each user's own credentials.
+- Do not embed tokens in URLs; use ssh keys or a git credential helper.
+- `artenv` runs the remote git commands non-interactively
+  (`GIT_TERMINAL_PROMPT=0`, ssh `BatchMode=yes`), so credentials must be
+  available without a prompt (ssh-agent or a credential helper). Because
+  `artenv` sets `GIT_SSH_COMMAND` for these calls, a `core.sshCommand` setting
+  and `GIT_SSH` are not used; ssh settings in `~/.ssh/config` still apply.
+- The seed commit is authored with your git identity (`user.name` /
+  `user.email`) when configured, otherwise as `artenv <artenv@localhost>`.
 
 **Step 2 — register an environment** pointing `--work` at the shared directory
 and `--repos` at the upstream repo (the command is printed for you):

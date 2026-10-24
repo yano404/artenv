@@ -1,0 +1,109 @@
+#!/usr/bin/env bash
+
+set -euo pipefail
+
+script_dir="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
+# shellcheck source=/dev/null
+source "${script_dir}/util.sh"
+
+usage() {
+  cat <<'EOS'
+usage: artenv templates add-repo <name> <url> [options]
+
+Register a template repository and fetch it. If the fetch fails, the
+registration is rolled back.
+
+Options:
+  --ref <ref>           Branch, tag or commit to track
+  --description <text>  Short description shown by `artenv templates repos'
+  --no-fetch            Register only; fetch later with `artenv templates update'
+  -h, --help            Show this help
+EOS
+}
+
+main() {
+  [[ -n "${ARTENV_ROOT:-}" ]] || die "ARTENV_ROOT is not set"
+  ensure_default_repo
+  require_yq
+
+  local ref="" description="" no_fetch=0
+  local have_ref=0 have_desc=0
+  local -a pos=()
+
+  while [[ $# -gt 0 ]]; do
+    case "$1" in
+      -h|--help)     usage; exit 0 ;;
+      --ref)
+        [[ $# -ge 2 ]] || die "--ref requires a value"
+        ref="$2"; have_ref=1; shift 2 ;;
+      --description)
+        [[ $# -ge 2 ]] || die "--description requires a value"
+        description="$2"; have_desc=1; shift 2 ;;
+      --no-fetch)    no_fetch=1; shift ;;
+      -*)            die "unknown option: $1" ;;
+      *)             pos+=("$1"); shift ;;
+    esac
+  done
+
+  [[ ${#pos[@]} -eq 2 ]] || die "usage: artenv templates add-repo <name> <url> [options]"
+  local name="${pos[0]}" url="${pos[1]}"
+
+  validate_template_repo_name "${name}"
+  [[ -n "${url}" ]] || die "url must not be empty"
+
+  # Validate and quote every value before anything touches disk.
+  local q_url q_desc="" q_ref=""
+  q_url="$(toml_quote "${url}")"
+  if [[ ${have_desc} -eq 1 ]]; then
+    q_desc="$(toml_quote "${description}")"
+  fi
+  if [[ ${have_ref} -eq 1 ]]; then
+    q_ref="$(toml_quote "${ref}")"
+  fi
+
+  local conf
+  conf="$(template_repo_conf "${name}")"
+  [[ ! -e "${conf}" ]] || die "template repository already exists: ${name}"
+
+  # No config exists, so any cache directory is an orphan.
+  local cache="${ARTENV_ROOT}/templates/${name}"
+  if [[ -e "${cache}" ]]; then
+    rm -rf -- "${cache}"
+    printf 'removed stale cache: templates/%s/\n' "${name}"
+  fi
+
+  mkdir -p -- "${ARTENV_ROOT}/template-repos"
+  local tmp
+  # Roll back on Ctrl-C/SIGTERM so an unfetched registration is never left behind.
+  trap 'rm -f -- "${tmp:-}" "${conf}"; exit 130' INT TERM
+  tmp="$(mktemp "${conf}.XXXXXX")"
+  {
+    printf '[repo]\n'
+    printf 'url         = %s\n' "${q_url}"
+    printf 'enabled     = true\n'
+    if [[ ${have_desc} -eq 1 ]]; then
+      printf 'description = %s\n' "${q_desc}"
+    fi
+    if [[ ${have_ref} -eq 1 ]]; then
+      printf 'ref         = %s\n' "${q_ref}"
+    fi
+  } > "${tmp}"
+  mv -- "${tmp}" "${conf}"
+  tmp=""
+  printf 'added    %s\n' "${name}"
+
+  if [[ ${no_fetch} -eq 1 ]]; then
+    printf "run 'artenv templates update %s' to fetch it\n" "${name}"
+    exit 0
+  fi
+
+  if ! "${script_dir}/artenv-templates-update" "${name}"; then
+    trap - INT TERM
+    rm -f -- "${conf}"
+    printf "artenv: could not fetch '%s'; registration rolled back (check the URL and authentication)\n" "${name}" >&2
+    exit 1
+  fi
+  trap - INT TERM
+}
+
+main "$@"
