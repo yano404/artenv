@@ -109,8 +109,10 @@ main() {
       repo="${repo_dest}"
     elif [[ "${have_repo}" -eq 1 ]]; then
       # Absolute, so the seed push (run from a temp repo) and the printed
-      # register command both point at the right place.
-      repo="$(resolve_path "${repo_dest}")"
+      # register command both point at the right place. Not canonicalised:
+      # the repo may live inside a <dest> that does not exist yet.
+      repo="${repo_dest}"
+      [[ "${repo}" == /* ]] || repo="${PWD}/${repo#./}"
     else
       repo="${dest}/$(basename -- "${dest}").git"
     fi

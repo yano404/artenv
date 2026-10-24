@@ -317,6 +317,26 @@ test_new_multiuser_dot_slash_colon_path_is_local() {
 
 repo_has_main_local() { git --git-dir="$1" rev-parse -q --verify refs/heads/main >/dev/null; }
 
+# --repo inside a not-yet-created <dest> must work: the repo path cannot be
+# canonicalised before <dest> exists.
+test_new_multiuser_repo_inside_new_dest() {
+  seed_cached_template
+  run new --multiuser "${ARTENV_ROOT}/proj" --repo "${ARTENV_ROOT}/proj/custom.git" -t myns/alpha
+  assert_status "${status}" 0
+  repo_has_main_local "${ARTENV_ROOT}/proj/custom.git" || fail "expected a seeded bare repo at proj/custom.git"
+  assert_contains "${output}" "--repos ${ARTENV_ROOT}/proj/custom.git"
+}
+
+# Same, with a relative --repo inside a not-yet-created <dest>.
+test_new_multiuser_relative_repo_inside_new_dest() {
+  seed_cached_template
+  cd "${ARTENV_ROOT}" || return 1
+  run new --multiuser "${ARTENV_ROOT}/proj" --repo "proj/custom.git" -t myns/alpha
+  assert_status "${status}" 0
+  repo_has_main_local "${ARTENV_ROOT}/proj/custom.git" || fail "expected a seeded bare repo at proj/custom.git"
+  assert_contains "${output}" "--repos ${ARTENV_ROOT}/proj/custom.git"
+}
+
 # --- 10: non-empty dest dies, nothing is created/removed --------------------
 
 test_new_multiuser_nonempty_dest_dies_untouched() {
