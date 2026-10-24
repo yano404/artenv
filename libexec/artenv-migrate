@@ -21,9 +21,25 @@ read_git_repos_v1() {
   return 1
 }
 
+# migrate_* keep a v1 entry whose links cannot be resolved and count it in
+# MIGRATE_FAILED; an original is removed only after its TOML has been written.
+MIGRATE_FAILED=0
+
+# Resolve <path> into the variable named <var>; fail on a missing target.
+migrate_resolve() { # <var> <path>
+  local _resolved
+  _resolved="$(resolve_path "$2")" || return 1
+  [[ -n "${_resolved}" ]] || return 1
+  printf -v "$1" '%s' "${_resolved}"
+}
+
+migrate_fail() { # <kind> <name> <path>
+  printf "artenv: cannot migrate %s '%s': cannot resolve %s (kept as is)\n" "$1" "$2" "$3" >&2
+  MIGRATE_FAILED=$((MIGRATE_FAILED + 1))
+}
+
 migrate_versions() {
   local versions_dir="${ARTENV_ROOT}/versions"
-  local migrated=0
 
   shopt -s nullglob
   local -a version_dirs=("${versions_dir}"/*)
@@ -45,20 +61,29 @@ migrate_versions() {
       version_type="$(< "${entry}/type")"
     fi
 
+    local tmp
     if [[ "${version_type}" == "apptainer" ]]; then
-      local image
-      image="$(resolve_path "${entry}/image")"
+      local image=""
+      if ! migrate_resolve image "${entry}/image"; then
+        migrate_fail "version" "${version_name}" "${entry}/image"
+        continue
+      fi
+      tmp="$(mktemp "${versions_dir}/.tmp.migrate.XXXXXX")"
       {
         printf '[version]\n'
         printf 'type = "apptainer"\n'
         printf 'image = "%s"\n' "${image}"
-      } > "${conf}"
+      } > "${tmp}"
     else
-      local artsys rootsys yamllib yamlcmake
-      artsys="$(resolve_path "${entry}/artsys")"
-      rootsys="$(resolve_path "${entry}/rootsys")"
-      yamllib="$(resolve_path "${entry}/yamllib")"
-      yamlcmake="$(resolve_path "${entry}/yamlcmake")"
+      local artsys="" rootsys="" yamllib="" yamlcmake="" key bad=""
+      for key in artsys rootsys yamllib yamlcmake; do
+        migrate_resolve "${key}" "${entry}/${key}" || { bad="${entry}/${key}"; break; }
+      done
+      if [[ -n "${bad}" ]]; then
+        migrate_fail "version" "${version_name}" "${bad}"
+        continue
+      fi
+      tmp="$(mktemp "${versions_dir}/.tmp.migrate.XXXXXX")"
       {
         printf '[version]\n'
         printf 'type = "native"\n'
@@ -66,20 +91,17 @@ migrate_versions() {
         printf 'rootsys = "%s"\n'   "${rootsys}"
         printf 'yamllib = "%s"\n'   "${yamllib}"
         printf 'yamlcmake = "%s"\n' "${yamlcmake}"
-      } > "${conf}"
+      } > "${tmp}"
     fi
 
+    mv -- "${tmp}" "${conf}"
     rm -rf -- "${entry}"
     printf '  migrated version: %s\n' "${version_name}"
-    migrated=$((migrated + 1))
   done
-
-  return "${migrated}"
 }
 
 migrate_envs() {
   local envs_dir="${ARTENV_ROOT}/envs"
-  local migrated=0
 
   shopt -s nullglob
   local -a env_dirs=("${envs_dir}"/*)
@@ -96,12 +118,18 @@ migrate_envs() {
       continue
     fi
 
-    local version_dir version_name
-    version_dir="$(resolve_path "${entry}/version")"
+    local version_dir="" version_name
+    if ! migrate_resolve version_dir "${entry}/version"; then
+      migrate_fail "env" "${env_name}" "${entry}/version"
+      continue
+    fi
     version_name="$(basename "${version_dir}")"
 
-    local work_dir
-    work_dir="$(resolve_path "${entry}/work")"
+    local work_dir=""
+    if ! migrate_resolve work_dir "${entry}/work"; then
+      migrate_fail "env" "${env_name}" "${entry}/work"
+      continue
+    fi
 
     local git_repos=""
     if [[ -e "${entry}/git_repos" ]]; then
@@ -114,6 +142,8 @@ migrate_envs() {
       cp -- "${entry}/artlogin.sh" "${envs_dir}/${env_name}.artlogin.sh"
     fi
 
+    local tmp
+    tmp="$(mktemp "${envs_dir}/.tmp.migrate.XXXXXX")"
     {
       printf '[env]\n'
       printf 'version = "%s"\n' "${version_name}"
@@ -122,14 +152,12 @@ migrate_envs() {
         printf 'git_repos = "%s"\n' "${git_repos}"
       fi
       printf 'use_artlogin = %s\n' "${use_artlogin}"
-    } > "${conf}"
+    } > "${tmp}"
 
+    mv -- "${tmp}" "${conf}"
     rm -rf -- "${entry}"
     printf '  migrated env: %s\n' "${env_name}"
-    migrated=$((migrated + 1))
   done
-
-  return "${migrated}"
 }
 
 migrate_default() {
@@ -171,14 +199,18 @@ main() {
   printf 'Migrating artenv v1 -> v2 ...\n'
 
   printf '\n[versions]\n'
-  migrate_versions || true
+  migrate_versions
 
   printf '\n[envs]\n'
-  migrate_envs || true
+  migrate_envs
 
   printf '\n[default]\n'
   migrate_default
 
+  if [[ "${MIGRATE_FAILED}" -gt 0 ]]; then
+    printf '\n'
+    die "some entries could not be migrated (${MIGRATE_FAILED}); fix the links above and re-run \`artenv migrate'"
+  fi
   printf '\nDone.\n'
 }
 

@@ -66,14 +66,15 @@ function main() {
 
     cat << 'EOS'
 artenv() {
-    local command
+    local command out
     command="${1:-}"
     if [ "$#" -gt 0 ]
     then
         shift
     fi
     case "$command" in
-        (shell) eval "$(artenv "sh-$command" "$@")" ;;
+        (shell) out="$(command artenv "sh-$command" "$@")" || return
+            eval "$out" ;;
         (*) command artenv "$command" "$@" ;;
     esac
 }

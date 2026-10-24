@@ -239,16 +239,14 @@ main_update() {
 
   apptainer pull --force "${image}" "${uri}"
 
+  # Only the digest changes; keep every other field (archived, ...).
   local tmp_conf
   tmp_conf="$(mktemp "${ARTENV_ROOT}/versions/.tmp.${version}.XXXXXX.toml")"
   trap 'rm -f -- "${tmp_conf}"' EXIT
-  {
-    printf '[version]\n'
-    printf 'type = "apptainer"\n'
-    printf 'uri = "%s"\n'   "${uri}"
-    printf 'image = "%s"\n' "${image}"
-    [[ -n "${remote_digest}" ]] && printf 'digest = "%s"\n' "${remote_digest}"
-  } > "${tmp_conf}"
+  grep -v '^digest[[:space:]]*=' -- "${version_conf}" > "${tmp_conf}" || true
+  if [[ -n "${remote_digest}" ]]; then
+    printf 'digest = "%s"\n' "${remote_digest}" >> "${tmp_conf}"
+  fi
   mv -- "${tmp_conf}" "${version_conf}"
   trap - EXIT
 

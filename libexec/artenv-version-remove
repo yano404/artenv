@@ -106,6 +106,21 @@ main() {
     fi
   fi
 
+  # Keep a SIF that another version still uses, however its path is spelled.
+  if [[ -n "${sif}" ]]; then
+    local other other_image
+    for other in "${ARTENV_ROOT}/versions/"*.toml; do
+      [[ -f "${other}" && "${other}" != "${version_conf}" ]] || continue
+      other_image="$(yq -p toml -oy -r '.version.image // ""' "${other}")"
+      [[ -n "${other_image}" ]] || continue
+      if [[ "${other_image}" == "${sif}" || "${other_image}" -ef "${sif}" ]]; then
+        printf "artenv: warning: not removing image used by '%s': %s\n" "$(basename -- "${other}" .toml)" "${sif}" >&2
+        sif=""
+        break
+      fi
+    done
+  fi
+
   if [[ "${assume_yes}" -ne 1 ]]; then
     local reply=""
     read -r -p "Remove version '${version}'? (y/N)> " reply || true

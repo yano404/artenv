@@ -101,7 +101,7 @@ activate_native() {
   print_export "ART_REPOS" "${git_repos}"
   printf 'unset ART_APPTAINER_IMAGE\n'
 
-  printf 'alias acd=%q\n' "cd ${work_dir}"
+  printf "alias acd='cd -- \"\$ART_WORK_DIR\"'\n"
   printf 'type artlogin &>/dev/null && unset -f artlogin\n'
 
   if [[ "${use_artlogin}" == "YES" ]]; then
@@ -109,8 +109,6 @@ activate_native() {
     printf 'artlogin() {\n'
     # shellcheck disable=SC2016
     printf '  . %q "$1"\n' "${artlogin_sh}"
-    # shellcheck disable=SC2016
-    printf '  alias acd=%q\n' 'cd $ART_WORK_DIR'
     printf '}\n'
   else
     print_export "USE_ARTLOGIN" "NO"
@@ -135,7 +133,7 @@ activate_apptainer() {
   print_export "ART_WORK_DIR" "${work_dir}"
   print_export "ART_REPOS" "${git_repos}"
 
-  printf 'alias acd=%q\n' "cd ${work_dir}"
+  printf "alias acd='cd -- \"\$ART_WORK_DIR\"'\n"
   printf 'type artlogin &>/dev/null && unset -f artlogin\n'
 
   # artlogin clones $ART_REPOS into $ART_ANALYSIS_DIR/user/<name> on the HOST;
@@ -147,8 +145,6 @@ activate_apptainer() {
     printf 'artlogin() {\n'
     # shellcheck disable=SC2016
     printf '  . %q "$1"\n' "${artlogin_sh}"
-    # shellcheck disable=SC2016
-    printf '  alias acd=%q\n' 'cd $ART_WORK_DIR'
     printf '}\n'
   else
     print_export "USE_ARTLOGIN" "NO"

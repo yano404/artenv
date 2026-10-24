@@ -8,6 +8,22 @@ Major versions track broad themes rather than strict per-flag SemVer — see
 
 ## [Unreleased]
 
+## [2.6.1] - 2026-10-24
+
+Failures no longer lose data or report success.
+
+### Fixed
+
+- `artenv migrate` no longer deletes a v1 version or env whose links cannot be
+  resolved. The entry is kept, reported, and `migrate` exits 1; re-run it after
+  fixing the links.
+- `artenv version remove --purge` keeps a SIF that another version still uses.
+- `artenv version install --update` keeps the other fields of the version
+  config (`archived`, ...) and only rewrites `digest`.
+- `artenv shell <env>` returns a non-zero status when activation fails, instead
+  of printing the error and succeeding.
+- `acd` works when the working directory contains spaces.
+
 ## [2.6.0] - 2026-10-24
 
 Template repositories managed from the command line. Facilities and
@@ -296,7 +312,8 @@ compatible: every old command name still works as a deprecated alias.
 
 - Initial release (symlink-based version/environment management).
 
-[Unreleased]: https://github.com/yano404/artenv/compare/v2.6.0...HEAD
+[Unreleased]: https://github.com/yano404/artenv/compare/v2.6.1...HEAD
+[2.6.1]: https://github.com/yano404/artenv/compare/v2.6.0...v2.6.1
 [2.6.0]: https://github.com/yano404/artenv/compare/v2.5.0...v2.6.0
 [2.5.0]: https://github.com/yano404/artenv/compare/v2.4.1...v2.5.0
 [2.4.1]: https://github.com/yano404/artenv/compare/v2.4.0...v2.4.1
