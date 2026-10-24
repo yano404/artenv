@@ -27,6 +27,7 @@ Major versions track broad themes rather than strict per-flag SemVer — see
   repository with the template. The remote is probed first; non-empty or
   unreachable remotes are refused before anything is created, and nothing is
   force-pushed. Remote git runs non-interactively.
+- README: how to create and share a template repository.
 
 ### Changed
 

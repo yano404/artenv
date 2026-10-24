@@ -529,6 +529,45 @@ fetched, updated, or removed by artenv.
 > first run from the bundled `share/template-repos/default.toml`, so editing it
 > never dirties the working tree or conflicts on upgrade.
 
+### Creating a template repository
+
+A facility or an experiment group can publish its own templates as an ordinary
+git repository. Each top-level directory is one template; files and dot
+directories at the top level are ignored, so the repository's own `README.md`
+is a good place to describe the templates:
+
+```
+ribf-templates/
+├── README.md          # not a template
+├── standard/          # -> ribf/standard
+│   ├── .gitignore
+│   ├── CMakeLists.txt
+│   └── src/
+└── online/            # -> ribf/online
+    └── ...
+```
+
+`artenv new` copies the whole template directory, dot files included, into the
+new working directory. A template is copied as is; artenv does not substitute
+variables in it.
+
+To share the repository, give members its name and URL. Each member registers
+it once:
+
+```sh
+artenv templates add-repo ribf git@example.org:ribf/ribf-templates.git
+artenv new /path/to/work -t ribf/standard
+```
+
+- Members pull new template revisions with `artenv templates update`. Tag
+  releases if members should be able to pin one with
+  `artenv templates add-repo ... --ref <tag>` (or `ref` in the config).
+- For a private repository, every member needs their own read access (SSH key
+  or credential helper).
+- A template used with `artenv new --multiuser` becomes the first commit of the
+  shared repository, so include a `.gitignore` that excludes build and output
+  files.
+
 ### Multi-user projects (`artenv new --multiuser`)
 
 For a project shared by several users, `artenv new --multiuser` sets up the
