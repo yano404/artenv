@@ -32,6 +32,8 @@ Major versions track broad themes rather than strict per-flag SemVer — see
 
 - Seed commits created by `artenv new --multiuser` use the invoking user's git
   identity when configured, otherwise `artenv <artenv@localhost>`.
+- `artenv new <dir>` now ends by printing the `artenv register ... --work <dir>`
+  command to run next, like `new --multiuser` already did.
 
 ### Fixed
 

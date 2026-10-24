@@ -514,6 +514,9 @@ artenv new /path/to/work -t standard
 ```
 
 Without `-t`, `artenv new` prompts you to choose a template interactively.
+`artenv new` only creates the directory; it then prints the
+`artenv register <env> --version <version> --work <dir>` command to turn it into
+an environment.
 
 ### Local templates
 
