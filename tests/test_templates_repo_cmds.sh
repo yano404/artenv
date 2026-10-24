@@ -378,3 +378,87 @@ test_add_repo_help_ref_mentions_commit() {
   assert_status "${status}" 0
   assert_contains "${output}" "Branch, tag or commit"
 }
+
+# --- templates edit-repo ---------------------------------------------------
+
+# Write an executable fake editor into the sandbox; it receives the file as $1.
+_edit_repo_fake_editor() {
+  local name="$1"; shift
+  local path="${ARTENV_ROOT}/${name}"
+  {
+    printf '#!/usr/bin/env bash\n'
+    printf '%s\n' "$@"
+  } > "${path}"
+  chmod +x "${path}"
+  printf '%s' "${path}"
+}
+
+test_edit_repo_opens_right_file_and_hints() {
+  write_repo_conf myrepo "file:///x"
+  write_repo_conf other "file:///y"
+  local ed
+  # shellcheck disable=SC2016  # $1 expands inside the generated script
+  ed="$(_edit_repo_fake_editor fakeed.sh 'printf "# marker-edit\n" >> "$1"')"
+  export EDITOR="${ed}"
+  unset VISUAL
+  run templates edit-repo myrepo
+  assert_status "${status}" 0
+  assert_contains "$(cat "${ARTENV_ROOT}/template-repos/myrepo.toml")" "marker-edit"
+  assert_not_contains "$(cat "${ARTENV_ROOT}/template-repos/other.toml")" "marker-edit"
+  assert_contains "${output}" "run 'artenv templates update myrepo' to apply url/ref changes"
+}
+
+test_edit_repo_visual_precedes_editor() {
+  write_repo_conf myrepo "file:///x"
+  local ev ee
+  # shellcheck disable=SC2016
+  ev="$(_edit_repo_fake_editor vis.sh 'printf "# via-visual\n" >> "$1"')"
+  # shellcheck disable=SC2016
+  ee="$(_edit_repo_fake_editor edi.sh 'printf "# via-editor\n" >> "$1"')"
+  export VISUAL="${ev}" EDITOR="${ee}"
+  run templates edit-repo myrepo
+  assert_status "${status}" 0
+  assert_contains "$(cat "${ARTENV_ROOT}/template-repos/myrepo.toml")" "via-visual"
+  assert_not_contains "$(cat "${ARTENV_ROOT}/template-repos/myrepo.toml")" "via-editor"
+}
+
+test_edit_repo_invalid_toml_warns() {
+  write_repo_conf myrepo "file:///x"
+  local ed
+  # shellcheck disable=SC2016
+  ed="$(_edit_repo_fake_editor bad.sh 'printf "[[[ not toml\n" >> "$1"')"
+  export EDITOR="${ed}"
+  unset VISUAL
+  run templates edit-repo myrepo
+  assert_status "${status}" 1
+  assert_contains "${output}" "not valid TOML"
+  assert_not_contains "${output}" "run 'artenv templates update"
+}
+
+test_edit_repo_unknown_repo_fails() {
+  export EDITOR=true
+  unset VISUAL
+  run templates edit-repo nosuch
+  assert_status "${status}" 1
+  assert_contains "${output}" "no such template repository"
+}
+
+test_edit_repo_local_reserved() {
+  export EDITOR=true
+  unset VISUAL
+  run templates edit-repo local
+  assert_status "${status}" 1
+  assert_contains "${output}" "reserved"
+}
+
+test_edit_repo_no_args_usage() {
+  run templates edit-repo
+  assert_status "${status}" 1
+  assert_contains "${output}" "usage: artenv templates edit-repo <name>"
+}
+
+test_edit_repo_unknown_option() {
+  run templates edit-repo --bogus
+  assert_status "${status}" 1
+  assert_contains "${output}" "unknown option: --bogus"
+}
