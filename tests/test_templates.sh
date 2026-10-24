@@ -290,6 +290,16 @@ test_new_template_not_found_dies() {
   _templates_cleanup
 }
 
+test_new_prints_next_register_command() {
+  seed_local_standard
+  run new "${ARTENV_ROOT}/work" -t local/standard
+  assert_status "${status}" 0
+  assert_contains "${output}" "created ${ARTENV_ROOT}/work from template local/standard"
+  assert_contains "${output}" "artenv register <env> --version <version> --work ${ARTENV_ROOT}/work"
+  # single-user scaffold: no --multiuser in the hint
+  assert_not_contains "${output}" "--multiuser"
+}
+
 test_new_local_standard() {
   TEMPLATE_REPOS=()
   seed_local_standard

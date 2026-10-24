@@ -176,6 +176,9 @@ main() {
 
   local rel="${template_path#"${templates_root}/"}"
   printf 'created %s from template %s\n' "${target}" "${rel}"
+  printf '\n'
+  printf 'Next: register an environment for this directory:\n'
+  printf '  artenv register <env> --version <version> --work %s\n' "${target}"
 }
 
 main "$@"
