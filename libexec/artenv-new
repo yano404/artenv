@@ -19,8 +19,9 @@ it prints the `artenv register ... --multiuser` command to run next.
 Modes:
   <dir> [-t T]            Scaffold: copy the template into <dir>.
   --multiuser <dest>      Create the shared dir <dest> (empty, group-shared) and
-                          seed an upstream bare repo from -t. The template lands
-                          ONLY in the repo, not in <dest>.
+                          seed an upstream repo from -t (a local bare repo, or an
+                          existing empty remote). The template lands ONLY in the
+                          repo, not in <dest>.
 
 Options:
   -t, --template [<repo>/]<name>   Template to use (prompted if omitted on a tty)

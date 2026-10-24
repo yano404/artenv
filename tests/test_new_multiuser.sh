@@ -241,6 +241,17 @@ test_new_multiuser_remote_push_rejected_cleans_up() {
   [[ -z "$(git ls-remote -- "${url}")" ]] || fail "expected remote to remain empty"
 }
 
+test_new_multiuser_remote_seed_failure_cleans_up() {
+  mkdir -p "${ARTENV_ROOT}/templates/myns/empty"
+  local url
+  url="$(make_fake_remote)"
+  run new --multiuser "${ARTENV_ROOT}/proj" --repo "${url}" -t myns/empty
+  assert_status "${status}" 1
+  assert_contains "${output}" "failed to seed"
+  assert_no_file "${ARTENV_ROOT}/proj"
+  [[ -z "$(git ls-remote -- "${url}")" ]] || fail "expected remote to remain empty"
+}
+
 test_new_multiuser_remote_head_not_main_warns() {
   seed_cached_template
   local url

@@ -580,7 +580,7 @@ artenv new --multiuser /shared/myproject \
   (`GIT_TERMINAL_PROMPT=0`, ssh `BatchMode=yes`), so credentials must be
   available without a prompt (ssh-agent or a credential helper). Because
   `artenv` sets `GIT_SSH_COMMAND` for these calls, a `core.sshCommand` setting
-  is not used; ssh settings in `~/.ssh/config` still apply.
+  and `GIT_SSH` are not used; ssh settings in `~/.ssh/config` still apply.
 - The seed commit is authored with your git identity (`user.name` /
   `user.email`) when configured, otherwise as `artenv <artenv@localhost>`.
 

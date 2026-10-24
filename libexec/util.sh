@@ -696,14 +696,29 @@ bootstrap_remote_repo() {
     rm -rf -- "${tmp}" "${errf}"
     exit 1
   fi
-  rm -rf -- "${tmp}" "${errf}"
+  rm -rf -- "${tmp}"
 
-  if ! git_remote ls-remote --heads -- "${url}" 2>/dev/null | grep -q 'refs/heads/main'; then
-    die "seeded repository has no main branch: ${url}"
+  # The push succeeded: from here on the remote is seeded, so a verification
+  # problem must only warn (dying would make the EXIT trap delete <dest>).
+  local out=""
+  if ! out="$(git_remote ls-remote --heads -- "${url}" 2>"${errf}")"; then
+    printf 'artenv: warning: pushed the seed commit but could not verify %s; check the remote\n' "${url}" >&2
+    cat -- "${errf}" >&2
+    rm -f -- "${errf}"
+    return 0
   fi
-  if ! git_remote ls-remote --symref -- "${url}" HEAD 2>/dev/null | grep -q 'ref: refs/heads/main'; then
+  if ! grep -q -E $'\trefs/heads/main$' <<< "${out}"; then
+    printf 'artenv: warning: pushed the seed commit but could not verify %s (no main branch listed); check the remote\n' "${url}" >&2
+    rm -f -- "${errf}"
+    return 0
+  fi
+  if ! out="$(git_remote ls-remote --symref -- "${url}" HEAD 2>/dev/null)"; then
+    out=""
+  fi
+  if ! grep -q -x -F $'ref: refs/heads/main\tHEAD' <<< "${out}"; then
     printf "artenv: warning: the remote's default branch is not 'main'; members' clones will be empty until it is set to 'main' (repository settings, or 'git symbolic-ref HEAD refs/heads/main' in the server-side bare repo)\n" >&2
   fi
+  rm -f -- "${errf}"
   return 0
 }
 
