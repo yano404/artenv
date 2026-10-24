@@ -23,6 +23,15 @@ Major versions track broad themes rather than strict per-flag SemVer — see
   `-t <repo>/<template>` still resolves.
 - **`artenv templates enable-repo <name>`** reverses `disable-repo`.
 - Shell completion for the new subcommands, including repository names.
+- **`artenv new --multiuser --repo <URL>`** seeds an existing, empty remote
+  repository with the template. The remote is probed first; non-empty or
+  unreachable remotes are refused before anything is created, and nothing is
+  force-pushed. Remote git runs non-interactively.
+
+### Changed
+
+- Seed commits created by `artenv new --multiuser` use the invoking user's git
+  identity when configured, otherwise `artenv <artenv@localhost>`.
 
 ### Fixed
 

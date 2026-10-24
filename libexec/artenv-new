@@ -25,8 +25,9 @@ Modes:
 Options:
   -t, --template [<repo>/]<name>   Template to use (prompted if omitted on a tty)
       --multiuser                  Multi-user skeleton mode
-      --repo <repo>                Upstream repo location (multiuser; local path or
-                                   an EMPTY remote URL). Default <dest>/<basename>.git
+      --repo <repo>                Upstream repo location (multiuser; local path or the
+                                   URL of an existing, empty remote repository).
+                                   Default <dest>/<basename>.git
   -h, --help                       Show this help
 EOS
 }

@@ -403,3 +403,10 @@ test_new_multiuser_seed_author_falls_back_to_artenv() {
   author="$(git -C "${ARTENV_ROOT}/proj/proj.git" log -1 --format='%an <%ae>' main)"
   [[ "${author}" == "artenv <artenv@localhost>" ]] || fail "unexpected author: ${author}"
 }
+
+test_new_help_mentions_remote_repo() {
+  run new --help
+  assert_status "${status}" 0
+  assert_contains "${output}" "empty remote"
+  assert_contains "${output}" "URL"
+}
