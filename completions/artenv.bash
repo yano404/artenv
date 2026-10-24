@@ -70,10 +70,10 @@ _artenv_completion() {
     templates)
       # `artenv templates <sub>`
       if [[ ${COMP_CWORD} -eq 2 ]]; then
-        COMPREPLY=( $(compgen -W "ls repos update add-repo remove-repo enable-repo disable-repo -h" -- "${cur}") )
+        COMPREPLY=( $(compgen -W "ls repos update add-repo edit-repo remove-repo enable-repo disable-repo -h" -- "${cur}") )
       else
         case "${COMP_WORDS[2]:-}" in
-          remove-repo|enable-repo|disable-repo)
+          edit-repo|remove-repo|enable-repo|disable-repo)
             COMPREPLY=( $(compgen -W "$(_artenv_list_template_repos)" -- "${cur}") )
             ;;
           add-repo)
