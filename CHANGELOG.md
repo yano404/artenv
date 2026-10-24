@@ -15,6 +15,9 @@ Major versions track broad themes rather than strict per-flag SemVer — see
   fails the registration is rolled back; `--no-fetch` only registers.
 - **`artenv templates remove-repo <name>`** deletes a repository's config and
   cache without prompting. Projects already created from it are unaffected.
+- **`artenv templates edit-repo <name>`** opens a repository's config in
+  `$VISUAL` / `$EDITOR` and validates the TOML afterwards; run
+  `templates update <name>` to apply url/ref changes.
 - **`artenv templates disable-repo <name>`** hides a repository from
   `templates ls` / `new` and skips it in `templates update`; qualified
   `-t <repo>/<template>` still resolves.

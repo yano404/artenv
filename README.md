@@ -231,6 +231,7 @@ Template commands live under the `templates` group (see [Templates](#templates))
 - `templates repos`            : List configured template repositories
 - `templates update [repo...]` : Clone or update template repositories
 - `templates add-repo <name> <url> [--ref R] [--description D] [--no-fetch]` : Register a template repository and fetch it
+- `templates edit-repo <name>`    : Edit a template repository config in $EDITOR
 - `templates remove-repo <name>`  : Remove a template repository and its cache
 - `templates enable-repo <name>`  : Enable a template repository
 - `templates disable-repo <name>` : Disable a template repository (hidden from listings, still usable via `-t`)
@@ -470,6 +471,9 @@ and fetch later with `artenv templates update`.
   cache without prompting. Projects already created from its templates are not
   affected. `default` can be removed like any other repository and is not
   re-seeded; restore it with `artenv templates add-repo default <url>`.
+- `artenv templates edit-repo <name>` opens `template-repos/<name>.toml` in
+  `$VISUAL` / `$EDITOR` and checks it is valid TOML afterwards; run
+  `artenv templates update <name>` to apply url/ref changes.
 - `artenv templates disable-repo <name>` / `enable-repo <name>` toggle
   `enabled`. A disabled repository is hidden from `templates ls` / `new` and
   skipped by `templates update`, but its cache is kept and

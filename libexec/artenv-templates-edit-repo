@@ -1,0 +1,58 @@
+#!/usr/bin/env bash
+
+set -euo pipefail
+
+script_dir="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
+# shellcheck source=/dev/null
+source "${script_dir}/util.sh"
+
+usage() {
+  cat <<'EOS'
+usage: artenv templates edit-repo <name>
+
+Open a template repository's config (template-repos/<name>.toml) in $EDITOR.
+After editing, the file is checked for valid TOML syntax. Changes to url/ref
+take effect on the next `artenv templates update <name>'.
+
+Options:
+  -h, --help    Show this help
+EOS
+}
+
+main() {
+  [[ -n "${ARTENV_ROOT:-}" ]] || die "ARTENV_ROOT is not set"
+  ensure_default_repo
+  require_yq
+
+  local name=""
+
+  while [[ $# -gt 0 ]]; do
+    case "$1" in
+      -h|--help) usage; exit 0 ;;
+      -*)        die "unknown option: $1" ;;
+      *)
+        [[ -z "${name}" ]] || die "usage: artenv templates edit-repo <name>"
+        name="$1"; shift ;;
+    esac
+  done
+
+  [[ -n "${name}" ]] || die "usage: artenv templates edit-repo <name>"
+  validate_template_repo_name "${name}"
+
+  local conf
+  conf="$(template_repo_conf "${name}")"
+  [[ -f "${conf}" ]] || die "no such template repository: ${name}"
+
+  local editor="${VISUAL:-${EDITOR:-vi}}"
+  # shellcheck disable=SC2086  # editor may carry arguments (e.g. `code -w`)
+  ${editor} "${conf}"
+
+  if ! yq -p toml -oy '.' "${conf}" >/dev/null 2>&1; then
+    printf 'artenv: warning: %s is not valid TOML after editing\n' "${conf}" >&2
+    exit 1
+  fi
+
+  printf "run 'artenv templates update %s' to apply url/ref changes\n" "${name}"
+}
+
+main "$@"

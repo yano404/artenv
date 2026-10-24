@@ -17,6 +17,7 @@ Subcommands:
   repos         List configured template repositories
   update        Clone or update template repositories
   add-repo      Register a template repository
+  edit-repo     Edit a template repository config in $EDITOR
   enable-repo   Enable a template repository
   disable-repo  Disable a template repository
   remove-repo   Remove a template repository and its cache

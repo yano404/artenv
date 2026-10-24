@@ -66,10 +66,10 @@ _artenv() {
     templates)
       # `artenv templates <sub>`
       if (( CURRENT == 3 )); then
-        compadd -- ls repos update add-repo remove-repo enable-repo disable-repo -h
+        compadd -- ls repos update add-repo edit-repo remove-repo enable-repo disable-repo -h
       else
         case "${words[3]}" in
-          remove-repo|enable-repo|disable-repo)
+          edit-repo|remove-repo|enable-repo|disable-repo)
             local -a trepos
             trepos=("${(@f)$(_artenv_list_template_repos)}")
             compadd -- "${trepos[@]}"

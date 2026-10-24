@@ -24,7 +24,7 @@ Version commands:
 
 Template commands:
   templates <cmd>   Manage project templates from external git repos
-                    (ls/repos/update/add-repo/remove-repo/enable-repo/disable-repo;
+                    (ls/repos/update/add-repo/edit-repo/remove-repo/enable-repo/disable-repo;
                      see \`artenv templates help')
 
 Utility commands:
