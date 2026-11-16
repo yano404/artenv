@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+# shellcheck disable=SC2154  # status/output are globals set by run() in lib.sh
 # Image repositories: seed, `version repos`, `version add-repo`.
 
 test_repos_seeds_default() {
