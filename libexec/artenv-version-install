@@ -21,23 +21,25 @@ confirm_yes() {
   esac
 }
 
-_ARTENV_INSTALL_REGISTRY="ghcr.io"
-_ARTENV_INSTALL_IMAGE="yano404/artemis_apptainer"
 _ARTENV_INSTALL_SCHEME="oras"
 
 print_help() {
   cat << 'EOS'
-Usage: artenv version install [OPTIONS] [TAG]
+Usage: artenv version install [OPTIONS] [[<repo>/]<tag>]
 
 Arguments:
-  TAG           Image tag to install (e.g. latest, v1.2.3)
-                If specified, skips URI/version/SIF prompts
+  [<repo>/]<tag>  Image tag to install from a registered image repository
+                  (e.g. v1.2.3, or g4/v1.2.3-g4.11.2). <repo> defaults to
+                  "default". If specified, skips URI/version/SIF prompts.
+                  Without it you choose the repository and enter the URI,
+                  version name and SIF path interactively.
 
 Options:
   --apptainer          Pull Apptainer image from registry and register (default)
   --native             Build artemis from source and register
   --update <version>   Re-pull the Apptainer image for an existing version
-  -l, --list           List available versions in the registry
+  -l, --list [<repo>]  List available tags of all image repositories,
+                       or only of <repo>
   -h, --help           Show this help message
 EOS
 }
@@ -75,19 +77,19 @@ fetch_manifest_digest() {
     | grep -i '^docker-content-digest:' | tr -d '\r\n' | sed 's/.*: //'
 }
 
-list_versions() {
-  require_yq
-  command -v curl >/dev/null 2>&1 || die "curl is required for --list"
-
-  local image="${_ARTENV_INSTALL_REGISTRY}/${_ARTENV_INSTALL_IMAGE}"
+# Print the tag/alias lines of <image>; 1 if the registry cannot be queried.
+list_image_tags() {
+  local image="$1"
 
   local token
-  token="$(ghcr_token "${image}")" || die "failed to get registry token"
+  token="$(ghcr_token "${image}")" || return 1
 
-  local -a tags
-  mapfile -t tags < <(ghcr_list_tags "${image}" || true)
+  local -a tags=()
+  local tag_lines
+  tag_lines="$(ghcr_list_tags "${image}")" || return 1
+  [[ -z "${tag_lines}" ]] || mapfile -t tags <<< "${tag_lines}"
 
-  local tmpdir tag digest
+  local tmpdir digest tag
   tmpdir="$(mktemp -d)"
 
   for tag in "${tags[@]}"; do
@@ -123,7 +125,37 @@ list_versions() {
   done
 
   rm -rf -- "${tmpdir}"
-  printf '%s\n' "${output[@]}" | sort
+  [[ ${#output[@]} -eq 0 ]] || printf '%s\n' "${output[@]}" | sort
+  return 0
+}
+
+list_versions() {
+  local repo_arg="${1:-}"
+  [[ -n "${ARTENV_ROOT:-}" ]] || die "ARTENV_ROOT is not set"
+  require_yq
+  command -v curl >/dev/null 2>&1 || die "curl is required for --list"
+
+  ensure_default_image_repo
+
+  local -a repos=()
+  if [[ -n "${repo_arg}" ]]; then
+    image_repo_image "${repo_arg}" >/dev/null
+    repos=("${repo_arg}")
+  else
+    mapfile -t repos < <(list_image_repos)
+    [[ ${#repos[@]} -gt 0 ]] || die "no image repositories registered (run \`artenv version add-repo')"
+  fi
+
+  local repo image failed=0
+  for repo in "${repos[@]}"; do
+    image="$(image_repo_image "${repo}")"
+    printf '%s (%s)\n' "${repo}" "${image}"
+    if ! list_image_tags "${image}"; then
+      printf 'artenv: warning: cannot list %s (%s)\n' "${repo}" "${image}" >&2
+      failed=1
+    fi
+  done
+  return "${failed}"
 }
 
 main_apptainer() {
@@ -134,12 +166,44 @@ main_apptainer() {
 
   local uri="" version="" sif_path=""
 
+  require_yq
+  ensure_default_image_repo
+
+  local repo="" image="" tag_mode=0
   if [[ -n "${tag}" ]]; then
-    uri="${_ARTENV_INSTALL_SCHEME}://${_ARTENV_INSTALL_REGISTRY}/${_ARTENV_INSTALL_IMAGE}:${tag}"
-    version="${_ARTENV_INSTALL_IMAGE##*/}-${tag}"
+    tag_mode=1
+    if [[ "${tag}" == */* ]]; then
+      repo="${tag%%/*}"
+      tag="${tag#*/}"
+    else
+      repo="default"
+    fi
+    [[ -n "${tag}" ]] || die "tag is empty"
+    image="$(image_repo_image "${repo}")"
+    uri="${_ARTENV_INSTALL_SCHEME}://${image}:${tag}"
+    version="${image##*/}-${tag}"
     sif_path="${ARTENV_ROOT}/images/${version}.sif"
   else
-    local default_uri="${_ARTENV_INSTALL_SCHEME}://${_ARTENV_INSTALL_REGISTRY}/${_ARTENV_INSTALL_IMAGE}:latest"
+    local -a repos=()
+    mapfile -t repos < <(list_image_repos)
+    [[ ${#repos[@]} -gt 0 ]] || die "no image repositories registered (run \`artenv version add-repo')"
+    if [[ ${#repos[@]} -eq 1 ]]; then
+      repo="${repos[0]}"
+    else
+      echo "Select the image repository"
+      local choice=""
+      select choice in "${repos[@]}"; do
+        if [[ -n "${choice:-}" ]]; then
+          break
+        else
+          echo "Wrong selection"
+        fi
+      done
+      [[ -n "${choice}" ]] || die "no image repository selected"
+      repo="${choice}"
+    fi
+    image="$(image_repo_image "${repo}")"
+    local default_uri="${_ARTENV_INSTALL_SCHEME}://${image}:latest"
     read -e -r -p "Enter the pull URI [${default_uri}]> " uri
     uri="${uri:-${default_uri}}"
 
@@ -154,7 +218,12 @@ main_apptainer() {
   fi
 
   local version_conf="${ARTENV_ROOT}/versions/${version}.toml"
-  [[ ! -e "${version_conf}" ]] || die "${version} already exists"
+  if [[ -e "${version_conf}" ]]; then
+    if [[ "${tag_mode}" -eq 1 ]]; then
+      die "${version} already exists; run \`artenv version install' without a tag to choose another name"
+    fi
+    die "${version} already exists"
+  fi
 
   printf '%s\n' "Configuration:"
   print_var "URI"          "${uri}"
@@ -405,7 +474,15 @@ main() {
         main_update "$1"
         return $?
         ;;
-      --list|-l)   list_versions    ; return $? ;;
+      --list|-l)
+        shift
+        local list_repo=""
+        if [[ $# -gt 0 && "$1" != -* ]]; then
+          list_repo="$1"
+        fi
+        list_versions "${list_repo}"
+        return $?
+        ;;
       --help|-h)   print_help       ; return 0  ;;
       --*) die "unknown option: $1" ;;
       *)   tag="$1"                 ; shift ;;

@@ -169,3 +169,151 @@ EOT
   assert_contains "${output}" "public ghcr.io image path"
   assert_file "${ARTENV_ROOT}/image-repos/default.toml"
 }
+
+# --- install / list from registered repositories ---------------------------
+
+# Fake `apptainer` on PATH: logs its args, creates the destination SIF.
+use_fake_apptainer() {
+  mkdir -p "${ARTENV_ROOT}/.fake-bin"
+  cat > "${ARTENV_ROOT}/.fake-bin/apptainer" <<'EOS'
+#!/usr/bin/env bash
+printf '%s\n' "$*" >> "${ARTENV_ROOT}/apptainer.log"
+shift
+[[ "${1:-}" == "--force" ]] && shift
+mkdir -p -- "$(dirname -- "$1")"
+: > "$1"
+EOS
+  chmod +x "${ARTENV_ROOT}/.fake-bin/apptainer"
+  export PATH="${ARTENV_ROOT}/.fake-bin:${PATH}"
+}
+
+test_install_default_unchanged() {
+  seed_share_image_default
+  use_fake_ghcr
+  use_fake_apptainer
+  fake_ghcr_image ghcr.io/yano404/artemis_apptainer v1
+  run_in $'y\n' version install v1
+  assert_status "${status}" 0
+  local conf="${ARTENV_ROOT}/versions/artemis_apptainer-v1.toml"
+  assert_file "${conf}"
+  [[ "$(toml_field "${conf}" version uri)" == "oras://ghcr.io/yano404/artemis_apptainer:v1" ]] \
+    || fail "uri wrong"
+  assert_contains "$(cat "${ARTENV_ROOT}/apptainer.log")" "oras://ghcr.io/yano404/artemis_apptainer:v1"
+}
+
+test_install_from_named_repo() {
+  seed_share_image_default
+  use_fake_ghcr
+  use_fake_apptainer
+  fake_ghcr_image ghcr.io/yano404/artemis-g4_apptainer v1.2.3-g4.11.2
+  run version add-repo g4 ghcr.io/yano404/artemis-g4_apptainer
+  assert_status "${status}" 0
+  run_in $'y\n' version install g4/v1.2.3-g4.11.2
+  assert_status "${status}" 0
+  local conf="${ARTENV_ROOT}/versions/artemis-g4_apptainer-v1.2.3-g4.11.2.toml"
+  assert_file "${conf}"
+  [[ "$(toml_field "${conf}" version uri)" == "oras://ghcr.io/yano404/artemis-g4_apptainer:v1.2.3-g4.11.2" ]] \
+    || fail "uri wrong"
+}
+
+test_install_without_default() {
+  seed_share_image_default
+  use_fake_ghcr
+  use_fake_apptainer
+  fake_ghcr_image ghcr.io/yano404/artemis-g4_apptainer v1
+  run version add-repo g4 ghcr.io/yano404/artemis-g4_apptainer
+  rm -f "${ARTENV_ROOT}/image-repos/default.toml"
+  run_in $'y\n' version install v1
+  assert_status "${status}" 1
+  assert_contains "${output}" "no such image repository: default"
+  run_in $'y\n' version install g4/v1
+  assert_status "${status}" 0
+}
+
+test_install_unknown_repo() {
+  seed_share_image_default
+  use_fake_apptainer
+  run_in $'y\n' version install nope/v1
+  assert_status "${status}" 1
+  assert_contains "${output}" "no such image repository: nope"
+}
+
+test_install_collision_hint() {
+  seed_share_image_default
+  use_fake_apptainer
+  mkdir -p "${ARTENV_ROOT}/versions"
+  printf '[version]\ntype = "native"\n' > "${ARTENV_ROOT}/versions/artemis_apptainer-v1.toml"
+  run_in $'y\n' version install v1
+  assert_status "${status}" 1
+  assert_contains "${output}" "without a tag"
+}
+
+test_install_interactive_selects_repo() {
+  seed_share_image_default
+  use_fake_ghcr
+  use_fake_apptainer
+  fake_ghcr_image ghcr.io/yano404/artemis-g4_apptainer v1
+  run version add-repo g4 ghcr.io/yano404/artemis-g4_apptainer
+  # repos sorted: default, g4 -> choose 2; accept URI default, name, SIF default
+  run_in $'2\n\nmyver\n\ny\n' version install
+  assert_status "${status}" 0
+  assert_contains "${output}" "oras://ghcr.io/yano404/artemis-g4_apptainer:latest"
+  assert_file "${ARTENV_ROOT}/versions/myver.toml"
+}
+
+test_install_interactive_no_repos() {
+  seed_share_image_default
+  use_fake_apptainer
+  mkdir "${ARTENV_ROOT}/image-repos"
+  run_in '' version install
+  assert_status "${status}" 1
+  assert_contains "${output}" "version add-repo"
+}
+
+test_list_all_repos_grouped() {
+  seed_share_image_default
+  use_fake_ghcr
+  fake_ghcr_image ghcr.io/yano404/artemis_apptainer v1 latest=sha256:v1
+  fake_ghcr_image ghcr.io/yano404/artemis-g4_apptainer v2
+  run version add-repo g4 ghcr.io/yano404/artemis-g4_apptainer
+  run version install --list
+  assert_status "${status}" 0
+  assert_contains "${output}" "default (ghcr.io/yano404/artemis_apptainer)"
+  assert_contains "${output}" "v1 -> latest"
+  assert_contains "${output}" "g4 (ghcr.io/yano404/artemis-g4_apptainer)"
+  assert_contains "${output}" "v2"
+}
+
+test_list_one_repo() {
+  seed_share_image_default
+  use_fake_ghcr
+  fake_ghcr_image ghcr.io/yano404/artemis_apptainer v1
+  fake_ghcr_image ghcr.io/yano404/artemis-g4_apptainer v2
+  run version add-repo g4 ghcr.io/yano404/artemis-g4_apptainer
+  run version install --list g4
+  assert_status "${status}" 0
+  assert_contains "${output}" "g4 ("
+  assert_not_contains "${output}" "default ("
+}
+
+test_list_partial_failure() {
+  seed_share_image_default
+  use_fake_ghcr
+  fake_ghcr_image ghcr.io/yano404/artemis_apptainer v1
+  run version repos   # seeds image-repos/
+  printf '[repo]\nimage = "ghcr.io/yano404/unknown_img"\n' > "${ARTENV_ROOT}/image-repos/g4.toml"
+  run version install --list
+  assert_status "${status}" 1
+  assert_contains "${output}" "default (ghcr.io/yano404/artemis_apptainer)"
+  assert_contains "${output}" "v1"
+  assert_contains "${output}" "cannot list g4"
+}
+
+test_list_no_repos() {
+  seed_share_image_default
+  use_fake_ghcr
+  mkdir "${ARTENV_ROOT}/image-repos"
+  run version install --list
+  assert_status "${status}" 1
+  assert_contains "${output}" "version add-repo"
+}
