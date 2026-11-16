@@ -19,7 +19,8 @@ Environment commands:
 
 Version commands:
   version <cmd>     Manage artemis versions
-                    (ls/register/remove/archive/unarchive/edit/install/current;
+                    (ls/register/remove/archive/unarchive/edit/install/current/
+                     repos/add-repo/remove-repo/edit-repo;
                      see \`artenv version help')
 
 Template commands:

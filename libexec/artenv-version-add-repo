@@ -15,7 +15,7 @@ The image is checked anonymously (its tag list must be reachable) before it
 is registered.
 
 Arguments:
-  name     Repository name (used with `artenv version install <name>:<tag>')
+  name     Repository name (used with `artenv version install <name>/<tag>')
   image    Image path, e.g. ghcr.io/<owner>/<name> (no tag, no scheme)
 
 Options:

@@ -88,3 +88,13 @@ test_help_listing_group_commands_present() {
   assert_contains "${output}" "templates <cmd>"
   assert_contains "${output}" "Deprecated aliases (kept for compatibility):"
 }
+
+# The version group help advertises the image repository subcommands.
+test_help_listing_version_repo_subcommands() {
+  run version -h
+  assert_status "${status}" 0
+  assert_contains "${output}" "add-repo"
+  assert_contains "${output}" "remove-repo"
+  assert_contains "${output}" "edit-repo"
+  assert_contains "${output}" "repos"
+}
