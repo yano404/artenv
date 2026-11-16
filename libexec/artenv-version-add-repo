@@ -60,6 +60,8 @@ main() {
   conf="$(image_repo_conf "${name}")"
   [[ ! -e "${conf}" ]] || die "image repository already exists: ${name}"
 
+  command -v curl >/dev/null 2>&1 || die "curl is required for \`artenv version add-repo'"
+
   # Verify reachability before anything touches disk.
   ghcr_list_tags "${image}" >/dev/null \
     || die "could not list tags for ${image} (is it a public ghcr.io image?)"

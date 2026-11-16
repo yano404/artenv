@@ -18,6 +18,11 @@ Major versions track broad themes rather than strict per-flag SemVer — see
   tags grouped per repository.
 - Shell completion for the new subcommands and for image repository names.
 
+### Changed
+
+- `artenv version install --list` now prints a `<repo> (<image>)` header before
+  each repository's tags.
+
 ## [2.6.1] - 2026-10-24
 
 Failures no longer lose data or report success.

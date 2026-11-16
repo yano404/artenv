@@ -293,7 +293,27 @@ test_list_one_repo() {
   run version install --list g4
   assert_status "${status}" 0
   assert_contains "${output}" "g4 ("
+  assert_contains "${output}" "v2"
   assert_not_contains "${output}" "default ("
+}
+
+test_list_rejects_bad_repo_name() {
+  seed_share_image_default
+  use_fake_ghcr
+  run version install --list ../share/image-repos/default
+  assert_status "${status}" 1
+  assert_contains "${output}" "invalid repository name"
+}
+
+test_install_rejects_tag_with_slash() {
+  seed_share_image_default
+  use_fake_ghcr
+  use_fake_apptainer
+  fake_ghcr_image ghcr.io/yano404/artemis_apptainer v1
+  run_in $'y\n' version install default/a/b
+  assert_status "${status}" 1
+  assert_contains "${output}" "invalid tag: a/b"
+  [[ ! -e "${ARTENV_ROOT}/images/artemis_apptainer-a" ]] || fail "images subdirectory left behind"
 }
 
 test_list_partial_failure() {

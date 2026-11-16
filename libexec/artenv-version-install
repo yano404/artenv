@@ -139,6 +139,7 @@ list_versions() {
 
   local -a repos=()
   if [[ -n "${repo_arg}" ]]; then
+    validate_image_repo_name "${repo_arg}"
     image_repo_image "${repo_arg}" >/dev/null
     repos=("${repo_arg}")
   else
@@ -175,10 +176,12 @@ main_apptainer() {
     if [[ "${tag}" == */* ]]; then
       repo="${tag%%/*}"
       tag="${tag#*/}"
+      validate_image_repo_name "${repo}"
     else
       repo="default"
     fi
     [[ -n "${tag}" ]] || die "tag is empty"
+    [[ "${tag}" != */* ]] || die "invalid tag: ${tag}"
     image="$(image_repo_image "${repo}")"
     uri="${_ARTENV_INSTALL_SCHEME}://${image}:${tag}"
     version="${image##*/}-${tag}"
