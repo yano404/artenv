@@ -77,7 +77,8 @@ fetch_manifest_digest() {
     | grep -i '^docker-content-digest:' | tr -d '\r\n' | sed 's/.*: //'
 }
 
-# Print the tag/alias lines of <image>; 1 if the registry cannot be queried.
+# Print the tag/alias lines of <image>; 1 if the registry cannot be queried,
+# 2 if some tags were listed without their digest.
 list_image_tags() {
   local image="$1"
 
@@ -100,15 +101,20 @@ list_image_tags() {
   done
   wait || true
 
+  # Tags whose digest could not be fetched are still listed, just without
+  # alias grouping.
   declare -A digest_map
+  local -a output=() unresolved=()
   for tag in "${tags[@]}"; do
     if [[ -f "${tmpdir}/${tag}" ]]; then
       digest="$(< "${tmpdir}/${tag}")"
       digest_map["${digest}"]+="${tag} "
+    else
+      unresolved+=("${tag}")
+      output+=("${tag}")
     fi
   done
 
-  local -a output=()
   local canonical
   for digest in "${!digest_map[@]}"; do
     local -a group_tags
@@ -126,6 +132,11 @@ list_image_tags() {
 
   rm -rf -- "${tmpdir}"
   [[ ${#output[@]} -eq 0 ]] || printf '%s\n' "${output[@]}" | sort
+  if [[ ${#unresolved[@]} -gt 0 ]]; then
+    printf 'artenv: warning: could not fetch the digest of %s (%s); aliases are not shown for them\n' \
+      "${image}" "${unresolved[*]}" >&2
+    return 2
+  fi
   return 0
 }
 
@@ -151,10 +162,12 @@ list_versions() {
   for repo in "${repos[@]}"; do
     image="$(image_repo_image "${repo}")"
     printf '%s (%s)\n' "${repo}" "${image}"
-    if ! list_image_tags "${image}"; then
+    local rc=0
+    list_image_tags "${image}" || rc=$?
+    if [[ "${rc}" -eq 1 ]]; then
       printf 'artenv: warning: cannot list %s (%s)\n' "${repo}" "${image}" >&2
-      failed=1
     fi
+    [[ "${rc}" -eq 0 ]] || failed=1
   done
   return "${failed}"
 }

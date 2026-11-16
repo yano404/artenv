@@ -297,6 +297,30 @@ test_list_one_repo() {
   assert_not_contains "${output}" "default ("
 }
 
+test_list_keeps_tags_without_digest() {
+  seed_share_image_default
+  use_fake_ghcr
+  # v2 and latest share a digest (latest is canonical); v3 has no digest.
+  fake_ghcr_image ghcr.io/yano404/artemis_apptainer v2=sha256:a latest=sha256:a v3=
+  run version install --list
+  assert_status "${status}" 1
+  assert_contains "${output}" "v2 -> latest"
+  assert_contains "${output}" $'\nv3\n'
+  assert_contains "${output}" "could not fetch the digest"
+  assert_not_contains "${output}" "cannot list"
+}
+
+test_list_all_digests_failing_is_not_success() {
+  seed_share_image_default
+  use_fake_ghcr
+  fake_ghcr_image ghcr.io/yano404/artemis_apptainer v1= v2=
+  run version install --list
+  assert_status "${status}" 1
+  assert_contains "${output}" "v1"
+  assert_contains "${output}" "v2"
+  assert_contains "${output}" "could not fetch the digest"
+}
+
 test_list_rejects_bad_repo_name() {
   seed_share_image_default
   use_fake_ghcr
