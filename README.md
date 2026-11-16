@@ -228,8 +228,8 @@ Version commands live under the `version` group:
 - `version install --list [REPO]` : List the tags available in the image repositories
 - `version repos`              : List registered image repositories
 - `version add-repo <name> <image> [--description D]` : Register a public ghcr.io image repository
-- `version remove-repo [name]` : Remove an image repository (installed versions are unaffected)
-- `version edit-repo [name]`   : Open an image repository's config in $EDITOR
+- `version remove-repo <name>` : Remove an image repository (installed versions are unaffected)
+- `version edit-repo <name>`   : Open an image repository's config in $EDITOR
 - `version install --update <version>` : Re-pull the Apptainer image for an existing version
 - `version help`               : Show the version group help
 
