@@ -1,0 +1,49 @@
+#!/usr/bin/env bash
+
+set -euo pipefail
+
+script_dir="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
+# shellcheck source=/dev/null
+source "${script_dir}/util.sh"
+
+usage() {
+  cat <<'EOS'
+usage: artenv version repos
+
+List registered image repositories (from image-repos/*.toml) with their
+image path and description.
+
+Options:
+  -h, --help    Show this help
+EOS
+}
+
+main() {
+  [[ -n "${ARTENV_ROOT:-}" ]] || die "ARTENV_ROOT is not set"
+
+  while [[ $# -gt 0 ]]; do
+    case "$1" in
+      -h|--help) usage; exit 0 ;;
+      *)         die "unknown option: $1" ;;
+    esac
+  done
+
+  ensure_default_image_repo
+  require_yq
+
+  local fmt='%-18s %-45s %s\n'
+  # shellcheck disable=SC2059  # fmt is a fixed, trusted format string
+  printf "${fmt}" "NAME" "IMAGE" "DESCRIPTION"
+
+  local name conf image desc
+  while IFS= read -r name; do
+    [[ -n "${name}" ]] || continue
+    conf="$(image_repo_conf "${name}")"
+    image="$(toml_get "${conf}" repo image "")"
+    desc="$(toml_get "${conf}" repo description "")"
+    # shellcheck disable=SC2059  # fmt is a fixed, trusted format string
+    printf "${fmt}" "${name}" "${image:--}" "${desc}"
+  done < <(list_image_repos)
+}
+
+main "$@"

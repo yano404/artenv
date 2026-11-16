@@ -79,34 +79,20 @@ list_versions() {
   require_yq
   command -v curl >/dev/null 2>&1 || die "curl is required for --list"
 
-  local accept="application/vnd.oci.image.index.v1+json,application/vnd.oci.image.manifest.v1+json,application/vnd.docker.distribution.manifest.v2+json"
-
-  local _curl="curl -sf --max-time 30 --connect-timeout 10"
+  local image="${_ARTENV_INSTALL_REGISTRY}/${_ARTENV_INSTALL_IMAGE}"
 
   local token
-  token="$(${_curl} \
-    "https://${_ARTENV_INSTALL_REGISTRY}/token?scope=repository:${_ARTENV_INSTALL_IMAGE}:pull&service=${_ARTENV_INSTALL_REGISTRY}" \
-    | yq -p json -oy -r '.token')"
-  [[ -n "${token}" ]] || die "failed to get registry token"
+  token="$(ghcr_token "${image}")" || die "failed to get registry token"
 
   local -a tags
-  mapfile -t tags < <(
-    ${_curl} \
-      -H "Authorization: Bearer ${token}" \
-      "https://${_ARTENV_INSTALL_REGISTRY}/v2/${_ARTENV_INSTALL_IMAGE}/tags/list" \
-      | yq -p json -oy -r '.tags[]' | sort
-  )
+  mapfile -t tags < <(ghcr_list_tags "${image}" || true)
 
   local tmpdir tag digest
   tmpdir="$(mktemp -d)"
 
   for tag in "${tags[@]}"; do
     (
-      digest="$(${_curl} -I \
-        -H "Authorization: Bearer ${token}" \
-        -H "Accept: ${accept}" \
-        "https://${_ARTENV_INSTALL_REGISTRY}/v2/${_ARTENV_INSTALL_IMAGE}/manifests/${tag}" \
-        | grep -i '^docker-content-digest:' | tr -d '\r\n' | sed 's/.*: //')"
+      digest="$(ghcr_manifest_digest "${image}" "${tag}" "${token}" || true)"
       [[ -n "${digest}" ]] && printf '%s\n' "${digest}" > "${tmpdir}/${tag}"
     ) &
   done

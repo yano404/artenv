@@ -158,3 +158,69 @@ assert_contains()     { [[ "${1}" == *"${2}"* ]] || fail "expected output to con
 assert_not_contains() { [[ "${1}" != *"${2}"* ]] || fail "expected output NOT to contain '${2}'; got: ${1}"; }
 assert_file()         { [[ -f "${1}" ]] || fail "expected file to exist: ${1}"; }
 assert_no_file()      { [[ ! -e "${1}" ]] || fail "expected file to be gone: ${1}"; }
+
+# --- image-repo / fake ghcr fixtures -----------------------------------------
+
+# Write the tracked image-repo seed into the sandbox (the sandbox has no share/).
+seed_share_image_default() {
+  mkdir -p "${ARTENV_ROOT}/share/image-repos"
+  cp -- "${ARTENV_REPO}/share/image-repos/default.toml" \
+    "${ARTENV_ROOT}/share/image-repos/default.toml"
+}
+
+# Register a fake public image: fake_ghcr_image <image> <tag>[=<digest>]...
+# The default digest of a tag is sha256:<tag>. No tags = an image with an
+# empty tag list.
+fake_ghcr_image() {
+  local image="$1"; shift
+  local path="${image#ghcr.io/}" spec
+  local dir="${ARTENV_ROOT}/.fake-ghcr/${path//\//__}"
+  mkdir -p "${dir}"
+  : > "${dir}/tags"
+  for spec in "$@"; do
+    if [[ "${spec}" == *=* ]]; then
+      printf '%s %s\n' "${spec%%=*}" "${spec#*=}" >> "${dir}/tags"
+    else
+      printf '%s sha256:%s\n' "${spec}" "${spec}" >> "${dir}/tags"
+    fi
+  done
+}
+
+# Put a fake `curl` on PATH. It serves the anonymous token, tags/list JSON and
+# `-I` manifest headers for registered images; anything else exits 22.
+use_fake_ghcr() {
+  mkdir -p "${ARTENV_ROOT}/.fake-bin"
+  cat > "${ARTENV_ROOT}/.fake-bin/curl" <<'EOS'
+#!/usr/bin/env bash
+url="" head=0
+for a in "$@"; do
+  case "${a}" in
+    -I) head=1 ;;
+    https://*) url="${a}" ;;
+  esac
+done
+root="${ARTENV_ROOT}/.fake-ghcr"
+dirof() { printf '%s/%s' "${root}" "${1//\//__}"; }
+case "${url}" in
+  https://ghcr.io/token\?scope=repository:*)
+    p="${url#*repository:}"; p="${p%%:pull*}"
+    [[ -d "$(dirof "${p}")" ]] || exit 22
+    printf '{"token":"faketoken"}\n' ;;
+  https://ghcr.io/v2/*/tags/list)
+    p="${url#https://ghcr.io/v2/}"; p="${p%/tags/list}"
+    [[ -d "$(dirof "${p}")" ]] || exit 22
+    list=""
+    while read -r t d; do list+="\"${t}\","; done < "$(dirof "${p}")/tags"
+    printf '{"name":"%s","tags":[%s]}\n' "${p}" "${list%,}" ;;
+  https://ghcr.io/v2/*/manifests/*)
+    p="${url#https://ghcr.io/v2/}"; tag="${p##*/manifests/}"; p="${p%/manifests/*}"
+    [[ -d "$(dirof "${p}")" ]] || exit 22
+    d="$(awk -v t="${tag}" '$1==t{print $2}' "$(dirof "${p}")/tags")"
+    [[ -n "${d}" ]] || exit 22
+    printf 'HTTP/2 200\r\ndocker-content-digest: %s\r\n\r\n' "${d}" ;;
+  *) exit 22 ;;
+esac
+EOS
+  chmod +x "${ARTENV_ROOT}/.fake-bin/curl"
+  export PATH="${ARTENV_ROOT}/.fake-bin:${PATH}"
+}
