@@ -99,3 +99,73 @@ test_add_repo_quotes_description() {
   [[ "$(toml_field "${ARTENV_ROOT}/image-repos/q.toml" repo description)" == 'say "hi" \ there' ]] \
     || fail "description did not round-trip"
 }
+
+# --- remove-repo / edit-repo -----------------------------------------------
+
+test_remove_repo_deletes_conf_only() {
+  use_fake_ghcr
+  fake_ghcr_image ghcr.io/yano404/artemis-g4_apptainer v1
+  run version add-repo g4 ghcr.io/yano404/artemis-g4_apptainer
+  assert_status "${status}" 0
+  local vt="${ARTENV_ROOT}/versions/artemis-g4_apptainer-v1.toml"
+  mkdir -p "${ARTENV_ROOT}/versions"
+  cat > "${vt}" <<'EOT'
+[version]
+type = "apptainer"
+uri = "oras://ghcr.io/yano404/artemis-g4_apptainer:v1"
+EOT
+  local before
+  before="$(cat "${vt}")"
+  run version remove-repo g4
+  assert_status "${status}" 0
+  assert_contains "${output}" "removed"
+  assert_no_file "${ARTENV_ROOT}/image-repos/g4.toml"
+  [[ "$(cat "${vt}")" == "${before}" ]] || fail "version toml changed"
+}
+
+test_remove_repo_default_allowed() {
+  seed_share_image_default
+  run version repos
+  assert_contains "${output}" "default"
+  run version remove-repo default
+  assert_status "${status}" 0
+  assert_no_file "${ARTENV_ROOT}/image-repos/default.toml"
+  run version repos
+  assert_status "${status}" 0
+  assert_not_contains "${output}" "default"
+}
+
+test_remove_repo_unknown() {
+  seed_share_image_default
+  run version remove-repo nosuch
+  assert_status "${status}" 1
+  assert_contains "${output}" "no such image repository"
+}
+
+test_edit_repo_uses_editor() {
+  seed_share_image_default
+  local ed="${ARTENV_ROOT}/ed.sh"
+  cat > "${ed}" <<'EOT'
+#!/usr/bin/env bash
+sed -i 's/^description *= .*/description = "edited desc"/' "$1"
+EOT
+  chmod +x "${ed}"
+  EDITOR="${ed}" run version edit-repo default
+  assert_status "${status}" 0
+  [[ "$(toml_field "${ARTENV_ROOT}/image-repos/default.toml" repo description)" == "edited desc" ]] \
+    || fail "description not updated"
+}
+
+test_edit_repo_invalid_image_reported() {
+  seed_share_image_default
+  local ed="${ARTENV_ROOT}/ed.sh"
+  cat > "${ed}" <<'EOT'
+#!/usr/bin/env bash
+sed -i 's|^image *= .*|image = "docker.io/x/y"|' "$1"
+EOT
+  chmod +x "${ed}"
+  EDITOR="${ed}" run version edit-repo default
+  assert_status "${status}" 1
+  assert_contains "${output}" "public ghcr.io image path"
+  assert_file "${ARTENV_ROOT}/image-repos/default.toml"
+}
