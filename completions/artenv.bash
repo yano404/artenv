@@ -32,6 +32,15 @@ _artenv_list_template_repos() {
   done
 }
 
+_artenv_list_image_repos() {
+  [[ -n "${ARTENV_ROOT:-}" && -d "${ARTENV_ROOT}/image-repos" ]] || return 0
+  local f
+  for f in "${ARTENV_ROOT}/image-repos"/*.toml; do
+    [[ -f "${f}" ]] || continue
+    basename "${f}" .toml
+  done
+}
+
 _artenv_list_templates() {
   command artenv templates ls 2>/dev/null
 }
@@ -51,14 +60,28 @@ _artenv_completion() {
     version)
       # `artenv version <sub> [target]`
       if [[ ${COMP_CWORD} -eq 2 ]]; then
-        COMPREPLY=( $(compgen -W "ls register remove archive unarchive info edit install current -h" -- "${cur}") )
+        COMPREPLY=( $(compgen -W "ls register remove archive unarchive info edit install repos add-repo remove-repo edit-repo current -h" -- "${cur}") )
       else
         case "${COMP_WORDS[2]:-}" in
           remove|archive|unarchive|info|edit)
             COMPREPLY=( $(compgen -W "$(_artenv_list_versions)" -- "${cur}") )
             ;;
+          remove-repo|edit-repo)
+            COMPREPLY=( $(compgen -W "$(_artenv_list_image_repos)" -- "${cur}") )
+            ;;
+          add-repo)
+            if [[ "${cur}" == -* ]]; then
+              COMPREPLY=( $(compgen -W "--description -h --help" -- "${cur}") )
+            else
+              COMPREPLY=()
+            fi
+            ;;
           install)
-            COMPREPLY=( $(compgen -W "--native --apptainer --update --list -l --help -h" -- "${cur}") )
+            if [[ "${prev}" == "--list" || "${prev}" == "-l" ]]; then
+              COMPREPLY=( $(compgen -W "$(_artenv_list_image_repos)" -- "${cur}") )
+            else
+              COMPREPLY=( $(compgen -W "--native --apptainer --update --list -l --help -h" -- "${cur}") )
+            fi
             ;;
           *)
             COMPREPLY=()

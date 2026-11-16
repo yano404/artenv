@@ -28,6 +28,14 @@ _artenv_list_template_repos() {
   done
 }
 
+_artenv_list_image_repos() {
+  [[ -n "${ARTENV_ROOT:-}" && -d "${ARTENV_ROOT}/image-repos" ]] || return
+  local f
+  for f in "${ARTENV_ROOT}/image-repos"/*.toml(N); do
+    basename "${f}" .toml
+  done
+}
+
 _artenv_list_templates() {
   command artenv templates ls 2>/dev/null
 }
@@ -48,14 +56,30 @@ _artenv() {
     version)
       # `artenv version <sub> [target]`
       if (( CURRENT == 3 )); then
-        compadd -- ls register remove archive unarchive info edit install current -h
+        compadd -- ls register remove archive unarchive info edit install repos add-repo remove-repo edit-repo current -h
       else
         case "${words[3]}" in
           remove|archive|unarchive|info|edit)
             compadd -- "${versions[@]}"
             ;;
+          remove-repo|edit-repo)
+            local -a irepos
+            irepos=("${(@f)$(_artenv_list_image_repos)}")
+            compadd -- "${irepos[@]}"
+            ;;
+          add-repo)
+            if [[ "${words[CURRENT]}" == -* ]]; then
+              compadd -- --description -h --help
+            fi
+            ;;
           install)
-            compadd -- --native --apptainer --update --list -l --help -h
+            if [[ "${words[CURRENT-1]}" == "--list" || "${words[CURRENT-1]}" == "-l" ]]; then
+              local -a irepos
+              irepos=("${(@f)$(_artenv_list_image_repos)}")
+              compadd -- "${irepos[@]}"
+            else
+              compadd -- --native --apptainer --update --list -l --help -h
+            fi
             ;;
           *)
             ;;

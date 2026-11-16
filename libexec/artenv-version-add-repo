@@ -1,0 +1,86 @@
+#!/usr/bin/env bash
+
+set -euo pipefail
+
+script_dir="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
+# shellcheck source=/dev/null
+source "${script_dir}/util.sh"
+
+usage() {
+  cat <<'EOS'
+usage: artenv version add-repo <name> <image> [options]
+
+Register a public ghcr.io image repository for `artenv version install'.
+The image is checked anonymously (its tag list must be reachable) before it
+is registered.
+
+Arguments:
+  name     Repository name (used with `artenv version install <name>/<tag>')
+  image    Image path, e.g. ghcr.io/<owner>/<name> (no tag, no scheme)
+
+Options:
+  --description <text>  Short description shown by `artenv version repos'
+  -h, --help            Show this help
+EOS
+}
+
+main() {
+  [[ -n "${ARTENV_ROOT:-}" ]] || die "ARTENV_ROOT is not set"
+
+  local description="" have_desc=0
+  local -a pos=()
+
+  while [[ $# -gt 0 ]]; do
+    case "$1" in
+      -h|--help)     usage; exit 0 ;;
+      --description)
+        [[ $# -ge 2 ]] || die "--description requires a value"
+        description="$2"; have_desc=1; shift 2 ;;
+      -*)            die "unknown option: $1" ;;
+      *)             pos+=("$1"); shift ;;
+    esac
+  done
+
+  [[ ${#pos[@]} -eq 2 ]] || die "usage: artenv version add-repo <name> <image> [options]"
+  local name="${pos[0]}" image="${pos[1]}"
+
+  ensure_default_image_repo
+  require_yq
+
+  validate_image_repo_name "${name}"
+  validate_ghcr_image "${image}"
+
+  local q_image q_desc=""
+  q_image="$(toml_quote "${image}")"
+  if [[ ${have_desc} -eq 1 ]]; then
+    q_desc="$(toml_quote "${description}")"
+  fi
+
+  local conf
+  conf="$(image_repo_conf "${name}")"
+  [[ ! -e "${conf}" ]] || die "image repository already exists: ${name}"
+
+  command -v curl >/dev/null 2>&1 || die "curl is required for \`artenv version add-repo'"
+
+  # Verify reachability before anything touches disk.
+  ghcr_list_tags "${image}" >/dev/null \
+    || die "could not list tags for ${image} (is it a public ghcr.io image?)"
+
+  mkdir -p -- "${ARTENV_ROOT}/image-repos"
+  local tmp
+  tmp="$(mktemp "${conf}.XXXXXX")"
+  trap 'rm -f -- "${tmp:-}"; exit 130' INT TERM
+  {
+    printf '[repo]\n'
+    printf 'image       = %s\n' "${q_image}"
+    if [[ ${have_desc} -eq 1 ]]; then
+      printf 'description = %s\n' "${q_desc}"
+    fi
+  } > "${tmp}"
+  mv -- "${tmp}" "${conf}"
+  tmp=""
+  trap - INT TERM
+  printf 'added %s\n' "${name}"
+}
+
+main "$@"

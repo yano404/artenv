@@ -42,7 +42,9 @@ test_apptainer_preserves_user_defined_make_and_cmake() {
   assert_status "${status}" 0
   local result
   result="$(
+    # shellcheck disable=SC2329  # user functions inspected via declare -f below
     make() { command make -j8 "$@"; }
+    # shellcheck disable=SC2329
     cmake() { command cmake -G Ninja "$@"; }
     eval "${output}"
     declare -f make | grep -q -- '-j8' && echo "make-preserved"
@@ -63,7 +65,9 @@ test_native_preserves_user_defined_make_and_cmake() {
   assert_status "${status}" 0
   local result
   result="$(
+    # shellcheck disable=SC2329  # user functions inspected via declare -f below
     make() { command make -j8 "$@"; }
+    # shellcheck disable=SC2329
     cmake() { command cmake -G Ninja "$@"; }
     eval "${output}"
     declare -f make | grep -q -- '-j8' && echo "make-preserved"

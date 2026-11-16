@@ -392,6 +392,122 @@ toml_quote() {
   printf '"%s"\n' "${s}"
 }
 
+# --- image repositories ----------------------------------------------------
+# An image repository is a public ghcr.io image path that `artenv version
+# install' can list and pull from. Registrations live in
+# ${ARTENV_ROOT}/image-repos/<name>.toml ([repo] image, description).
+
+# Seed the bundled default image repo on first use. Same zombie-free contract
+# as ensure_default_repo: only acts when image-repos/ is ABSENT. Never returns
+# non-zero (callers run under `set -e').
+ensure_default_image_repo() {
+  local repos_dir="${ARTENV_ROOT}/image-repos"
+  local seed="${ARTENV_ROOT}/share/image-repos/default.toml"
+  [[ -d "${repos_dir}" ]] && return 0
+  [[ -f "${seed}" ]]      || return 0
+  mkdir -p -- "${repos_dir}" 2>/dev/null || return 0
+  cp -- "${seed}" "${repos_dir}/default.toml" 2>/dev/null || return 0
+  return 0
+}
+
+# Print the config file path for an image repo.
+image_repo_conf() {
+  printf '%s/image-repos/%s.toml\n' "${ARTENV_ROOT}" "$1"
+}
+
+# Print configured image repo names (one per line, sorted).
+list_image_repos() {
+  local repos_dir="${ARTENV_ROOT}/image-repos"
+  [[ -d "${repos_dir}" ]] || return 0
+  local -a files=()
+  shopt -s nullglob
+  files=("${repos_dir}"/*.toml)
+  shopt -u nullglob
+  local f
+  for f in "${files[@]}"; do
+    basename "${f}" .toml
+  done | sort
+}
+
+# Die unless <name> is usable as an image repo name (no path escape, no
+# leading `.' or `-').
+validate_image_repo_name() {
+  local name="$1"
+  [[ -n "${name}" ]]                          || die "invalid repository name: (empty)"
+  [[ "${name}" != *"/"* ]]                    || die "invalid repository name: ${name}"
+  [[ "${name}" != "." && "${name}" != ".." ]] || die "invalid repository name: ${name}"
+  case "${name}" in
+    .*|-*) die "invalid repository name: ${name}" ;;
+  esac
+  return 0
+}
+
+# Die unless <image> is a tagless, digestless public ghcr.io image path with at
+# least <owner>/<name> after the registry host.
+validate_ghcr_image() {
+  local image="$1"
+  local msg="image must be a public ghcr.io image path such as ghcr.io/<owner>/<name>: ${image}"
+  [[ "${image}" =~ ^ghcr\.io(/[a-z0-9._-]+){2,}$ ]] || die "${msg}"
+  local rest="${image#ghcr.io/}" comp
+  local -a comps
+  IFS=/ read -r -a comps <<< "${rest}"
+  for comp in "${comps[@]}"; do
+    [[ "${comp}" != "." && "${comp}" != ".." ]] || die "${msg}"
+  done
+  return 0
+}
+
+# Print the image of a registered repo; die if it is not registered.
+image_repo_image() {
+  local name="$1" conf
+  conf="$(image_repo_conf "${name}")"
+  [[ -f "${conf}" ]] || die "no such image repository: ${name} (see \`artenv version repos')"
+  toml_get "${conf}" repo image ""
+}
+
+_GHCR_ACCEPT="application/vnd.oci.image.index.v1+json,application/vnd.oci.image.manifest.v1+json,application/vnd.docker.distribution.manifest.v2+json"
+
+# Print an anonymous pull token for <image> (ghcr.io/<path>); 1 on failure.
+ghcr_token() {
+  local path="${1#ghcr.io/}" token
+  command -v curl >/dev/null 2>&1 || return 1
+  token="$(curl -sf --max-time 30 --connect-timeout 10 \
+    "https://ghcr.io/token?scope=repository:${path}:pull&service=ghcr.io" \
+    | yq -p json -oy -r '.token')" || return 1
+  [[ -n "${token}" && "${token}" != "null" ]] || return 1
+  printf '%s\n' "${token}"
+}
+
+# Print the tags of <image>, sorted, one per line. An empty list is success;
+# an unreachable image or unparseable response returns 1.
+ghcr_list_tags() {
+  local image="$1" path="${1#ghcr.io/}" token tags
+  token="$(ghcr_token "${image}")" || return 1
+  tags="$(curl -sf --max-time 30 --connect-timeout 10 \
+    -H "Authorization: Bearer ${token}" \
+    "https://ghcr.io/v2/${path}/tags/list" \
+    | yq -p json -oy -r '.tags[]')" || return 1
+  [[ -z "${tags}" ]] || printf '%s\n' "${tags}" | sort
+  return 0
+}
+
+# Print the manifest digest of <image>:<tag>; a token may be passed to avoid a
+# second token request. 1 on failure.
+ghcr_manifest_digest() {
+  local image="$1" tag="$2" token="${3:-}" path="${1#ghcr.io/}" digest
+  command -v curl >/dev/null 2>&1 || return 1
+  if [[ -z "${token}" ]]; then
+    token="$(ghcr_token "${image}")" || return 1
+  fi
+  digest="$(curl -sf --max-time 30 --connect-timeout 10 -I \
+    -H "Authorization: Bearer ${token}" \
+    -H "Accept: ${_GHCR_ACCEPT}" \
+    "https://ghcr.io/v2/${path}/manifests/${tag}" \
+    | grep -i '^docker-content-digest:' | tr -d '\r\n' | sed 's/.*: //')" || return 1
+  [[ -n "${digest}" ]] || return 1
+  printf '%s\n' "${digest}"
+}
+
 # Set the `enabled' flag in a repo conf, preserving every other line. yq cannot
 # write TOML tables, so this is a text edit (see set_archived_flag).
 set_template_repo_enabled_flag() {

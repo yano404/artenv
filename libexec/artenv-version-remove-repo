@@ -1,0 +1,50 @@
+#!/usr/bin/env bash
+
+set -euo pipefail
+
+script_dir="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
+# shellcheck source=/dev/null
+source "${script_dir}/util.sh"
+
+usage() {
+  cat <<'EOS'
+usage: artenv version remove-repo <name>
+
+Remove an image repository: delete its configuration (image-repos/<name>.toml).
+Versions already installed from it are not affected. No confirmation is asked.
+
+Options:
+  -h, --help    Show this help
+EOS
+}
+
+main() {
+  [[ -n "${ARTENV_ROOT:-}" ]] || die "ARTENV_ROOT is not set"
+  ensure_default_image_repo
+  require_yq
+
+  local name=""
+
+  while [[ $# -gt 0 ]]; do
+    case "$1" in
+      -h|--help) usage; exit 0 ;;
+      -*)        die "unknown option: $1" ;;
+      *)
+        [[ -z "${name}" ]] || die "usage: artenv version remove-repo <name>"
+        name="$1"; shift ;;
+    esac
+  done
+
+  [[ -n "${name}" ]] || die "usage: artenv version remove-repo <name>"
+  validate_image_repo_name "${name}"
+
+  local conf
+  conf="$(image_repo_conf "${name}")"
+  [[ -f "${conf}" ]] || die "no such image repository: ${name} (see \`artenv version repos')"
+
+  rm -f -- "${conf}"
+  printf 'removed config: image-repos/%s.toml\n' "${name}"
+
+}
+
+main "$@"

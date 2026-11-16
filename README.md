@@ -96,6 +96,9 @@ Available tags can be listed with:
 artenv version install --list
 ```
 
+Images are pulled from registered image repositories; see
+[Image repositories](#image-repositories).
+
 #### Native (existing installation)
 
 If you have already built Artemis from source, register it manually:
@@ -221,7 +224,12 @@ Version commands live under the `version` group:
 - `version unarchive [version]`: Unarchive a version
 - `version info [version]`     : Show the configuration of a version (defaults to the current one)
 - `version edit [version]`     : Open a version's config in $EDITOR
-- `version install [--native|--apptainer] [TAG]` : Install artemis (build from source or pull an Apptainer image)
+- `version install [--native|--apptainer] [[REPO/]TAG]` : Install artemis (build from source or pull an Apptainer image; `REPO` defaults to `default`)
+- `version install --list [REPO]` : List the tags available in the image repositories
+- `version repos`              : List registered image repositories
+- `version add-repo <name> <image> [--description D]` : Register a public ghcr.io image repository
+- `version remove-repo <name>` : Remove an image repository (installed versions are unaffected)
+- `version edit-repo <name>`   : Open an image repository's config in $EDITOR
 - `version install --update <version>` : Re-pull the Apptainer image for an existing version
 - `version help`               : Show the version group help
 
@@ -517,6 +525,28 @@ Without `-t`, `artenv new` prompts you to choose a template interactively.
 `artenv new` only creates the directory; it then prints the
 `artenv register <env> --version <version> --work <dir>` command to turn it into
 an environment.
+
+### Image repositories
+
+`artenv version install` pulls Apptainer images from *image repositories*:
+named entries under `image-repos/<name>.toml`, each pointing at one public
+`ghcr.io` image (no authentication). `default`
+(`ghcr.io/yano404/artemis_apptainer`) is seeded on first use and may be
+removed like any other.
+
+```sh
+artenv version add-repo g4 ghcr.io/yano404/artemis-g4_apptainer --description "Geant4 build"
+artenv version repos                  # list registered repositories
+artenv version install --list g4      # tags of one repository (omit to list all)
+artenv version install g4/v1.2.3-g4.11.2
+artenv version install latest         # no repo prefix: the `default` repository
+```
+
+The installed version is named `<last path component of image>-<tag>`
+(e.g. `artemis-g4_apptainer-v1.2.3-g4.11.2`). If two images share the same last
+component the names can collide; use the interactive `artenv version install`,
+which lets you choose the version name. `version remove-repo` never affects
+installed versions, since each one stores its own pull URI.
 
 ### Local templates
 

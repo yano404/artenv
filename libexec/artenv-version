@@ -22,6 +22,10 @@ Subcommands:
   info        Show the configuration of a version
   edit        Open a version's config in $EDITOR
   install     Install artemis (--native: build, --apptainer: pull image)
+  repos       List registered image repositories
+  add-repo    Register a ghcr.io image repository
+  remove-repo Remove an image repository
+  edit-repo   Open an image repository's config in $EDITOR
 
 Options:
   -h, --help  Show this help

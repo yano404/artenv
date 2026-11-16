@@ -8,6 +8,21 @@ Major versions track broad themes rather than strict per-flag SemVer — see
 
 ## [Unreleased]
 
+### Added
+
+- Image repositories: `artenv version repos`, `add-repo`, `remove-repo` and
+  `edit-repo` manage public `ghcr.io` images under `image-repos/<name>.toml`.
+  `default` (`ghcr.io/yano404/artemis_apptainer`) is seeded on first use.
+- `artenv version install [<repo>/]<tag>` installs from a registered image
+  repository (no prefix means `default`), and `install --list [<repo>]` lists
+  tags grouped per repository.
+- Shell completion for the new subcommands and for image repository names.
+
+### Changed
+
+- `artenv version install --list` now prints a `<repo> (<image>)` header before
+  each repository's tags.
+
 ## [2.6.1] - 2026-10-24
 
 Failures no longer lose data or report success.
